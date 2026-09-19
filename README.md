@@ -14,11 +14,30 @@ bun install @serkonda7/solid-components solid-js
 
 ## 🚀 Usage
 ```tsx
-import { /* Component */ } from 'solid-components';
+import { /* Component */ } from 'solid-components'
+import '@serkonda7/solid-components/styles.css'
 ```
 
 These components are available:
-- _none_
+- `DataTable` - generic table with optional sorting, row selection, actions, loading, and empty states.
+
+
+## Components
+### DataTable
+The table does not fetch data or perform navigation.
+Consumers provide the rows, cell rendering, and callbacks:
+
+```tsx
+<DataTable
+  rows={items}
+  getRowId={(item) => item.id}
+  columns={[{ key: 'name', label: 'Name', sortable: true }]}
+  sortKey={sortKey}
+  sortDirection={sortDirection}
+  onSort={setSortKey}
+  getCell={(item, column) => column.key === 'name' ? item.name : null}
+/>
+```
 
 
 ## 📜 License

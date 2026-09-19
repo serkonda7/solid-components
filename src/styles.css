@@ -1,0 +1,44 @@
+.data-table-wrap {
+	overflow-x: auto;
+}
+
+.data-table {
+	width: 100%;
+	max-width: 100%;
+	border-collapse: collapse;
+}
+
+.data-table-checkbox {
+	width: 2rem;
+}
+
+.data-table-sort {
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-transform: inherit;
+	letter-spacing: inherit;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.data-table-sort:hover {
+	background: transparent;
+	color: inherit;
+	text-decoration: underline;
+}
+
+.data-table-status {
+	color: var(--text-secondary, #616161);
+}
+
+.data-table-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}

@@ -4,4 +4,10 @@
  * Add components here as they are implemented so consumers can import them
  * from the package root.
  */
-export {}
+
+export {
+	DataTable,
+	type DataTableColumn,
+	type DataTableProps,
+	type DataTableSortDirection,
+} from './data-table'
