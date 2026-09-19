@@ -8,19 +8,35 @@
   "files": {
     "includes": ["scripts/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"]
   },
-  "formatter": { "enabled": true },
+  "formatter": {
+    "enabled": true,
+    "useEditorconfig": true
+  },
   "linter": {
     "enabled": true,
     "rules": { "preset": "recommended" }
   },
   "javascript": {
     "formatter": {
-      "indentStyle": "space",
-      "indentWidth": 2,
-      "semicolons": "always",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
       "quoteStyle": "single",
       "lineWidth": 100
     }
   },
-  "json": { "formatter": { "indentStyle": "space", "lineWidth": 100 } }
+  "html": {
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "css": {
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "json": {
+    "formatter": {
+      "lineWidth": 100
+    }
+  }
 }

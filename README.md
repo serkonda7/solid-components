@@ -1,36 +1,32 @@
-# solid-components
+# @serkonda7/solid-components
+[![CI][ci-badge]][ci-status]
+[![npm version][npm-badge]][npm-link]
+[![npm updated][npm-date-badge]][npm-link]
 
 Reusable components for [SolidJS](https://www.solidjs.com/).
 
-## Installation
 
+## 📦 Installation
 ```sh
-bun add solid-components solid-js
-# or: npm install solid-components solid-js
+bun install @serkonda7/solid-components solid-js
 ```
 
-## Usage
 
-Import components from the package root:
-
+## 🚀 Usage
 ```tsx
 import { /* Component */ } from 'solid-components';
 ```
 
-The package is currently a foundation for the component library. Components
-will be added to `src/` and re-exported from `src/index.ts`.
+These components are available:
+- _none_
 
-## Development
 
-Install [Bun](https://bun.sh/), then run:
+## 📜 License
+This repo is licensed under the [MIT License](LICENSE.txt).
 
-```sh
-bun install
-bun run test       # type-check, build, and run tests
-bun run lint:ci    # check formatting and lint rules
-bun run build      # create the production package in dist/
-```
 
-## License
-
-MIT
+[ci-badge]: https://github.com/serkonda7/solid-components/actions/workflows/ci.yml/badge.svg
+[ci-status]: https://github.com/serkonda7/solid-components/actions/workflows/ci.yml
+[npm-badge]: https://nodei.co/npm/@serkonda7/solid-components.png?style=shields&data=v&color=blue
+[npm-date-badge]: https://nodei.co/npm/@serkonda7/solid-components.png?style=shields&data=u&color=blue
+[npm-link]: https://www.npmjs.com/package/@serkonda7/solid-components
