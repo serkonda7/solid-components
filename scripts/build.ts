@@ -1,19 +1,16 @@
 const production = Bun.argv.includes('--prod')
 
-const result = await Bun.build({
-	entrypoints: ['./src/index.ts'],
-	outdir: './dist',
-	target: 'browser',
-	format: 'esm',
-	minify: production,
-	sourcemap: production ? 'external' : 'inline',
-	external: ['solid-js'],
-})
+const build = Bun.spawnSync([
+	'bunx',
+	'vite',
+	'build',
+	'--config',
+	'vite.config.ts',
+	'--mode',
+	production ? 'production' : 'development',
+])
 
-if (!result.success) {
-	for (const message of result.logs) console.error(message)
-	process.exit(1)
-}
+if (build.exitCode !== 0) process.exit(build.exitCode)
 
 const declaration = Bun.spawnSync(['bunx', 'tsc', '--project', 'tsconfig.build.json'])
 
