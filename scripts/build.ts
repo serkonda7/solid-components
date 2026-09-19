@@ -19,4 +19,6 @@ const declaration = Bun.spawnSync(['bunx', 'tsc', '--project', 'tsconfig.build.j
 
 if (declaration.exitCode !== 0) process.exit(declaration.exitCode)
 
+await Bun.write('./dist/styles.css', Bun.file('./src/styles.css'))
+
 export {}
