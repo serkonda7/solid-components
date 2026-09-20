@@ -1,5 +1,93 @@
 .data-table-wrap {
+	/* `color-scheme` is intentionally inherited so `light-dark()` below follows
+	the consumer's theme (e.g. the dark example). */
+}
+
+.data-table-scroll {
 	overflow-x: auto;
+}
+
+.data-table-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 0.5rem;
+}
+
+.data-table-customizer {
+	position: relative;
+}
+
+.data-table-customizer-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0.375rem 0.625rem;
+	border: 1px solid
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 0.375rem;
+	background: var(
+		--data-table-customizer-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.data-table-customizer-button:hover {
+	background: var(
+		--data-table-customizer-hover-bg,
+		var(--surface-hover, light-dark(#f5f5f5, #292d33))
+	);
+}
+
+.data-table-customizer-panel {
+	position: absolute;
+	top: calc(100% + 0.375rem);
+	right: 0;
+	z-index: 20;
+	min-width: 12rem;
+	padding: 0.75rem;
+	border: 1px solid
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #30343a)));
+	border-radius: 0.5rem;
+	background: var(
+		--data-table-panel-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+}
+
+.data-table-customizer-title {
+	margin: 0 0 0.5rem;
+	font-weight: 600;
+}
+
+.data-table-customizer-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	gap: 0.375rem;
+}
+
+.data-table-customizer-option {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	cursor: pointer;
+}
+
+.data-table-customizer-option:has(input:disabled) {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.data-table-customizer-actions {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
 }
 
 .data-table {

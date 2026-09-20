@@ -18,10 +18,22 @@ const products: Product[] = [
 ]
 
 const columns: DataTableColumn<Product>[] = [
-	{ key: 'name', label: 'Name', sortable: true, getValue: (product) => product.name },
+	{
+		key: 'name',
+		label: 'Name',
+		sortable: true,
+		toggleable: false,
+		getValue: (product) => product.name,
+	},
 	{ key: 'category', label: 'Category', sortable: true, getValue: (product) => product.category },
 	{ key: 'price', label: 'Price', sortable: true, getValue: (product) => `$${product.price}` },
-	{ key: 'stock', label: 'Stock', sortable: true, getValue: (product) => product.stock },
+	{
+		key: 'stock',
+		label: 'Stock',
+		sortable: true,
+		defaultVisible: false,
+		getValue: (product) => product.stock,
+	},
 ]
 
 export default function App() {
@@ -90,6 +102,7 @@ export default function App() {
 					sortKey={sortKey}
 					sortDirection={sortDirection}
 					onSort={sort}
+					showColumnCustomizer
 					loading={loading}
 					loadingContent={<p class="table-message">Loading products…</p>}
 					emptyContent={<p class="table-message">No products found.</p>}

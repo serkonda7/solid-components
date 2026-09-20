@@ -19,7 +19,7 @@ import '@serkonda7/solid-components/styles.css'
 ```
 
 These components are available:
-- `DataTable` - generic table with optional sorting, row selection, actions, loading, and empty states.
+- `DataTable` - generic table with optional sorting, row selection, actions, loading, empty states, and column customizer.
 
 
 ## Components
@@ -38,6 +38,26 @@ Consumers provide the rows, cell rendering, and callbacks:
   getCell={(item, column) => column.key === 'name' ? item.name : null}
 />
 ```
+
+#### Column customizer
+Opt in with `showColumnCustomizer`. The table renders a "Columns" button with a
+dialog listing every column as a checkbox:
+
+```tsx
+const columns = [
+  { key: 'name', label: 'Name', toggleable: false }, // always shown
+  { key: 'price', label: 'Price', defaultVisible: false }, // hidden initially
+]
+
+<DataTable rows={items} getRowId={(item) => item.id} columns={columns} showColumnCustomizer />
+```
+
+- Uncontrolled by default; use `defaultVisibleColumns` for the initial state.
+- Controlled with `visibleColumns` + `onVisibleColumnsChange` to persist the
+  selection
+- `Show all` / `Reset` restore all columns or the defaults.
+- Labels can be customized via `columnCustomizerLabel`, `columnCustomizerTitle`,
+  `columnCustomizerShowAllLabel`, and `columnCustomizerResetLabel`.
 
 
 ## 📜 License

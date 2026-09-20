@@ -72,6 +72,10 @@ button:hover {
 	font-size: 13px;
 }
 
+.table-card .data-table-toolbar {
+	padding: 12px 16px 0;
+}
+
 .data-table th,
 .data-table td {
 	padding: 14px 16px;
