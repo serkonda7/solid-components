@@ -14,50 +14,20 @@ bun install @serkonda7/solid-components solid-js
 
 ## 🚀 Usage
 ```tsx
-import { /* Component */ } from 'solid-components'
+import { DataTable } from '@serkonda7/solid-components'
 import '@serkonda7/solid-components/styles.css'
+
+<DataTable
+  rows={items}
+  getRowId={(item) => item.id}
+  columns={[{ key: 'name', label: 'Name' }]}
+/>
 ```
 
 These components are available:
 - `DataTable` - generic table with optional sorting, row selection, actions, loading, empty states, and column customizer.
 
-
-## Components
-### DataTable
-The table does not fetch data or perform navigation.
-Consumers provide the rows, cell rendering, and callbacks:
-
-```tsx
-<DataTable
-  rows={items}
-  getRowId={(item) => item.id}
-  columns={[{ key: 'name', label: 'Name', sortable: true }]}
-  sortKey={sortKey}
-  sortDirection={sortDirection}
-  onSort={setSortKey}
-  getCell={(item, column) => column.key === 'name' ? item.name : null}
-/>
-```
-
-#### Column customizer
-Opt in with `showColumnCustomizer`. The table renders a "Columns" button with a
-dialog listing every column as a checkbox:
-
-```tsx
-const columns = [
-  { key: 'name', label: 'Name', toggleable: false }, // always shown
-  { key: 'price', label: 'Price', defaultVisible: false }, // hidden initially
-]
-
-<DataTable rows={items} getRowId={(item) => item.id} columns={columns} showColumnCustomizer />
-```
-
-- Uncontrolled by default; use `defaultVisibleColumns` for the initial state.
-- Controlled with `visibleColumns` + `onVisibleColumnsChange` to persist the
-  selection
-- `Show all` / `Reset` restore all columns or the defaults.
-- Labels can be customized via `columnCustomizerLabel`, `columnCustomizerTitle`,
-  `columnCustomizerShowAllLabel`, and `columnCustomizerResetLabel`.
+For the full API, examples, and agent notes, see [docs.md](docs.md).
 
 
 ## 📜 License
