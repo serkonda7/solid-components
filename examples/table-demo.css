@@ -1,0 +1,39 @@
+/* Showcase-only table presentation. The reusable DataTable rules are in
+ * ../src/styles.css; this file only makes the demo's table fit its dark card. */
+.table-card .data-table-toolbar {
+	padding: 12px 16px 0;
+}
+
+.data-table th,
+.data-table td {
+	padding: 14px 16px;
+}
+
+.data-table thead {
+	background: #1e2023;
+}
+
+.data-table th {
+	color: #9b9da5;
+	font-size: 12px;
+	text-align: left;
+}
+
+.data-table td {
+	border-top: 1px solid #2b2f34;
+	font-size: 14px;
+}
+
+.data-table tbody tr:hover {
+	background: #22262b;
+}
+
+.table-message {
+	padding: 16px;
+	text-align: center;
+}
+
+.out-of-stock {
+	color: #f08a84;
+	font-weight: 600;
+}

@@ -2,6 +2,7 @@ import { createMemo, createSignal, Show } from 'solid-js'
 import { DataTable, type DataTableColumn, type DataTableSortDirection } from '../src'
 import '../src/styles.css'
 import './styles.css'
+import './table-demo.css'
 
 type Product = {
 	id: number
