@@ -36,6 +36,7 @@ export interface DataTableProps<TRow> {
 	sortKey?: string | Accessor<string | undefined>
 	sortDirection?: DataTableSortDirection | Accessor<DataTableSortDirection>
 	onSort?: (key: string) => void
+	onSortClear?: () => void
 	visibleColumns?: string[] | Accessor<string[]>
 	defaultVisibleColumns?: string[]
 	onVisibleColumnsChange?: (visibleKeys: string[]) => void
@@ -295,6 +296,17 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 														: ' ▼'
 													: ''}
 											</button>
+											<Show when={sortKey() === column.key && props.onSortClear}>
+												<button
+													type="button"
+													class="data-table-sort-clear"
+													aria-label="Clear sorting"
+													title="Clear sorting"
+													onClick={() => props.onSortClear?.()}
+												>
+													×
+												</button>
+											</Show>
 										</Show>
 									</th>
 								)}

@@ -118,6 +118,22 @@
 	text-decoration: underline;
 }
 
+.data-table-sort-clear {
+	margin-left: 0.25rem;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.data-table-sort-clear:hover {
+	color: var(--data-table-sort-clear-hover, currentColor);
+	opacity: 0.7;
+}
+
 .data-table-status {
 	color: var(--text-secondary, #616161);
 }

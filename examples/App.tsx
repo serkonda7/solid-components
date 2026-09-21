@@ -67,6 +67,11 @@ export default function App() {
 		}
 	}
 
+	function clearSort() {
+		setSortKey(undefined)
+		setSortDirection('asc')
+	}
+
 	return (
 		<main>
 			<h1>DataTable example</h1>
@@ -103,6 +108,7 @@ export default function App() {
 					sortKey={sortKey}
 					sortDirection={sortDirection}
 					onSort={sort}
+					onSortClear={clearSort}
 					showColumnCustomizer
 					loading={loading}
 					loadingContent={<p class="table-message">Loading products…</p>}
