@@ -1,5 +1,5 @@
-import { createMemo, createSignal, Show } from 'solid-js'
-import { DataTable, type DataTableColumn, type DataTableSortDirection } from '../src'
+import { createSignal, Show } from 'solid-js'
+import { DataTable, type DataTableColumn } from '../src'
 import '../src/styles.css'
 import './styles.css'
 import './table-demo.css'
@@ -39,38 +39,8 @@ const columns: DataTableColumn<Product>[] = [
 
 export default function App() {
 	const [selected, setSelected] = createSignal<number[]>([])
-	const [sortKey, setSortKey] = createSignal<string | undefined>('name')
-	const [sortDirection, setSortDirection] = createSignal<DataTableSortDirection>('asc')
 	const [loading, setLoading] = createSignal(false)
 	const [empty, setEmpty] = createSignal(false)
-
-	const sortedProducts = createMemo(() => {
-		const key = sortKey()
-		if (!key) return products
-
-		return [...products].sort((a, b) => {
-			const result = String(a[key as keyof Product]).localeCompare(
-				String(b[key as keyof Product]),
-				undefined,
-				{ numeric: true },
-			)
-			return sortDirection() === 'asc' ? result : -result
-		})
-	})
-
-	function sort(key: string) {
-		if (sortKey() === key) {
-			setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'))
-		} else {
-			setSortKey(key)
-			setSortDirection('asc')
-		}
-	}
-
-	function clearSort() {
-		setSortKey(undefined)
-		setSortDirection('asc')
-	}
 
 	return (
 		<main>
@@ -100,15 +70,12 @@ export default function App() {
 					<span class="count">{products.length} items</span>
 				</header>
 				<DataTable
-					rows={() => (empty() ? [] : sortedProducts())}
+					rows={() => (empty() ? [] : products)}
 					columns={columns}
 					getRowId={(product) => product.id}
 					selected={selected}
 					onSelectionChange={(ids) => setSelected(ids.map(Number))}
-					sortKey={sortKey}
-					sortDirection={sortDirection}
-					onSort={sort}
-					onSortClear={clearSort}
+					defaultSort={{ key: 'name', direction: 'asc' }}
 					showColumnCustomizer
 					loading={loading}
 					loadingContent={<p class="table-message">Loading products…</p>}

@@ -11,10 +11,16 @@ import {
 
 export type DataTableSortDirection = 'asc' | 'desc'
 
+export interface DataTableSort {
+	key: string
+	direction: DataTableSortDirection
+}
+
 export interface DataTableColumn<TRow> {
 	key: string
 	label: string
 	sortable?: boolean
+	sortValue?: (row: TRow) => unknown
 	class?: string
 	ariaLabel?: string
 	getValue?: (row: TRow) => JSX.Element
@@ -35,8 +41,10 @@ export interface DataTableProps<TRow> {
 	selectionLabel?: string
 	sortKey?: string | Accessor<string | undefined>
 	sortDirection?: DataTableSortDirection | Accessor<DataTableSortDirection>
+	defaultSort?: DataTableSort
 	onSort?: (key: string) => void
 	onSortClear?: () => void
+	onSortChange?: (sort: DataTableSort | undefined) => void
 	visibleColumns?: string[] | Accessor<string[]>
 	defaultVisibleColumns?: string[]
 	onVisibleColumnsChange?: (visibleKeys: string[]) => void
@@ -65,8 +73,13 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const rows = createMemo(() => read(props.rows))
 	const loading = () => read(props.loading ?? false)
 	const selected = () => read(props.selected ?? [])
-	const sortKey = () => read(props.sortKey ?? undefined)
-	const sortDirection = () => read(props.sortDirection ?? 'asc')
+	const sortControlled = props.sortKey !== undefined || props.sortDirection !== undefined
+	const [internalSort, setInternalSort] = createSignal<DataTableSort | undefined>(
+		props.defaultSort,
+	)
+	const sortKey = () => (sortControlled ? read(props.sortKey ?? undefined) : internalSort()?.key)
+	const sortDirection = () =>
+		sortControlled ? read(props.sortDirection ?? 'asc') : (internalSort()?.direction ?? 'asc')
 	const showCustomizer = () => read(props.showColumnCustomizer ?? false)
 	const hasSelection = () => props.selected !== undefined && props.onSelectionChange !== undefined
 	const allSelected = () => {
@@ -100,6 +113,49 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		props.columns.filter((column) => column.toggleable !== false),
 	)
 	const allToggleableKeys = createMemo(() => toggleableColumns().map((column) => column.key))
+
+	function sortValue(row: TRow, column: DataTableColumn<TRow>): unknown {
+		if (column.sortValue) return column.sortValue(row)
+		return (row as Record<string, unknown>)[column.key]
+	}
+
+	function compareSortValues(left: unknown, right: unknown): number {
+		if (left === right) return 0
+		if (left == null) return -1
+		if (right == null) return 1
+		if (typeof left === 'number' && typeof right === 'number') return left - right
+		return String(left).localeCompare(String(right), undefined, { numeric: true })
+	}
+
+	const sortedRows = createMemo(() => {
+		const currentRows = rows()
+		const key = sortKey()
+		if (sortControlled || !key) return currentRows
+
+		const column = props.columns.find((candidate) => candidate.key === key)
+		if (!column) return currentRows
+		const direction = sortDirection() === 'asc' ? 1 : -1
+		return [...currentRows].sort(
+			(left, right) =>
+				direction * compareSortValues(sortValue(left, column), sortValue(right, column)),
+		)
+	})
+
+	function changeSort(key: string): void {
+		const next: DataTableSort = {
+			key,
+			direction: sortKey() === key && sortDirection() === 'asc' ? 'desc' : 'asc',
+		}
+		if (!sortControlled) setInternalSort(next)
+		props.onSort?.(key)
+		props.onSortChange?.(next)
+	}
+
+	function clearSort(): void {
+		if (!sortControlled) setInternalSort(undefined)
+		props.onSortClear?.()
+		props.onSortChange?.(undefined)
+	}
 
 	function orderKeys(keys: string[]): string[] {
 		const order = new Map(props.columns.map((column, index) => [column.key, index] as const))
@@ -287,7 +343,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 											<button
 												type="button"
 												class="data-table-sort"
-												onClick={() => props.onSort?.(column.key)}
+												onClick={() => changeSort(column.key)}
 											>
 												{column.label}
 												{sortKey() === column.key
@@ -296,13 +352,20 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 														: ' ▼'
 													: ''}
 											</button>
-											<Show when={sortKey() === column.key && props.onSortClear}>
+											<Show
+												when={
+													sortKey() === column.key &&
+													(!sortControlled ||
+														props.onSortClear ||
+														props.onSortChange)
+												}
+											>
 												<button
 													type="button"
 													class="data-table-sort-clear"
 													aria-label="Clear sorting"
 													title="Clear sorting"
-													onClick={() => props.onSortClear?.()}
+													onClick={clearSort}
 												>
 													×
 												</button>
@@ -317,7 +380,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 						</tr>
 					</thead>
 					<tbody>
-						<For each={rows()}>
+						<For each={sortedRows()}>
 							{(row) => (
 								<tr>
 									<Show when={hasSelection()}>
