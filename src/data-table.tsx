@@ -141,20 +141,17 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		)
 	})
 
+	/** Cycles the clicked column through `asc` → `desc` → unsorted. */
 	function changeSort(key: string): void {
-		const next: DataTableSort = {
-			key,
-			direction: sortKey() === key && sortDirection() === 'asc' ? 'desc' : 'asc',
-		}
+		const active = sortKey() === key
+		const next: DataTableSort | undefined =
+			active && sortDirection() === 'desc'
+				? undefined
+				: { key, direction: active ? 'desc' : 'asc' }
 		if (!sortControlled) setInternalSort(next)
 		props.onSort?.(key)
+		if (!next) props.onSortClear?.()
 		props.onSortChange?.(next)
-	}
-
-	function clearSort(): void {
-		if (!sortControlled) setInternalSort(undefined)
-		props.onSortClear?.()
-		props.onSortChange?.(undefined)
 	}
 
 	function orderKeys(keys: string[]): string[] {
@@ -362,28 +359,6 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 														: ''}
 												</span>
 											</button>
-											{/* Hidden instead of removed so sorting never changes column widths. */}
-											<Show
-												when={
-													!sortControlled ||
-													props.onSortClear ||
-													props.onSortChange
-												}
-											>
-												<button
-													type="button"
-													class="data-table-sort-clear"
-													classList={{
-														'data-table-sort-clear-hidden':
-															sortKey() !== column.key,
-													}}
-													aria-label="Clear sorting"
-													title="Clear sorting"
-													onClick={clearSort}
-												>
-													×
-												</button>
-											</Show>
 										</Show>
 									</th>
 								)}

@@ -50,17 +50,34 @@ function sortButton(container: HTMLElement, label: string): HTMLButtonElement {
 test('sorting does not change column widths', () => {
 	const container = mount()
 	const initial = columnWidths(container)
-	const clicks = ['Name', 'Name', 'Price', 'Price']
+	const clicks = ['Name', 'Name', 'Name', 'Price', 'Price', 'Price']
 
 	for (const label of clicks) {
 		sortButton(container, label).click()
 		expect(columnWidths(container), `after clicking ${label}`).toEqual(initial)
 	}
+})
 
-	const clear = container.querySelector<HTMLButtonElement>(
-		'.data-table-sort-clear:not(.data-table-sort-clear-hidden)',
+function columnText(container: HTMLElement, index: number): string[] {
+	return [...container.querySelectorAll('tbody tr')].map(
+		(tr) => tr.children[index]?.textContent ?? '',
 	)
-	if (!clear) throw new Error('No visible clear button')
-	clear.click()
-	expect(columnWidths(container), 'after clearing').toEqual(initial)
+}
+
+test('clicking a header cycles asc, desc, unsorted', () => {
+	const container = mount()
+	const name = sortButton(container, 'Name')
+	const th = name.closest('th')
+
+	name.click()
+	expect(th?.getAttribute('aria-sort')).toBe('ascending')
+	expect(columnText(container, 0)).toEqual(['A', 'B', 'C'])
+
+	name.click()
+	expect(th?.getAttribute('aria-sort')).toBe('descending')
+	expect(columnText(container, 0)).toEqual(['C', 'B', 'A'])
+
+	name.click()
+	expect(th?.getAttribute('aria-sort')).toBe('none')
+	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
 })

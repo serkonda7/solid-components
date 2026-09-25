@@ -20,8 +20,8 @@ navigation. Consumers provide the rows, cell rendering, and callbacks:
 ```
 
 ### Sorting
-Mark columns with `sortable: true`. Clicking a header toggles `asc` → `desc`;
-the `×` button next to the active header clears sorting.
+Mark columns with `sortable: true`. Clicking a header cycles `asc` → `desc` →
+unsorted; clicking another header starts it at `asc`.
 
 - Uncontrolled by default: the table sorts `rows` itself. Set the initial state
   with `defaultSort`. Values come from `column.sortValue(row)`, falling back to
@@ -29,12 +29,11 @@ the `×` button next to the active header clears sorting.
   `localeCompare` with `numeric: true`, `null`/`undefined` first.
 - Controlled when `sortKey` or `sortDirection` is passed: the table only renders
   the sort state and passes `rows` through unchanged, so the consumer must sort
-  them. Handle clicks with `onSort(key)` or `onSortChange(sort)`; the clear button
-  shows only if `onSortClear` or `onSortChange` is set.
-- `onSort`, `onSortClear`, and `onSortChange(sort | undefined)` also fire in
-  uncontrolled mode.
-- Sorting never changes column widths: the arrow slot has a fixed width and the
-  clear button is always rendered, hidden via `visibility` when inactive.
+  them. Handle clicks with `onSort(key)` (fires on every click; the consumer
+  cycles) or `onSortChange(sort | undefined)` (receives the next state).
+- `onSortClear` additionally fires when the cycle reaches unsorted. All sort
+  callbacks also fire in uncontrolled mode.
+- Sorting never changes column widths: the arrow slot has a fixed width.
 
 ### Column customizer
 Opt in with `showColumnCustomizer`. The table renders a "Columns" button with a
@@ -78,8 +77,7 @@ Full interactive coverage (sort, selection, custom cells, actions, loading, empt
 - Visibility state drops unknown keys and omits `toggleable: false` columns from
   tracking (they stay visible implicitly); output keys follow `columns` order.
 - Header markup must not change size with sort state; keep the fixed-width
-  `.data-table-sort-indicator` and the `visibility`-hidden clear button
-  (covered by `src/data-table.test.tsx`).
+  `.data-table-sort-indicator` (covered by `src/data-table.test.tsx`).
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
 - Customizer panel dismisses on outside `pointerdown` and `Escape` with cleanup in
   `createEffect`; keep both listeners paired.
