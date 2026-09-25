@@ -28,6 +28,7 @@
     "lint": "biome check --write",
     "lint:ci": "biome ci",
     "check": "tsc --noEmit",
+    "test": "vitest run",
     "examples": "vite --config examples/vite.config.ts",
     "build:dev": "bun run scripts/build.ts --dev",
     "build": "bun run check && bun run scripts/build.ts --prod",
@@ -43,9 +44,12 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@types/bun": "1.4.2",
+    "@vitest/browser-playwright": "^5.0.2",
+    "playwright": "^1.63.0",
     "solid-js": "~1.9.15",
     "typescript": "~7.0.2",
     "vite": "~8.3.0",
-    "vite-plugin-solid": "~2.11.14"
+    "vite-plugin-solid": "~2.11.14",
+    "vitest": "^5.0.2"
   }
 }

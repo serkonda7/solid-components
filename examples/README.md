@@ -3,7 +3,7 @@
 This directory contains a small interactive showcase for the library. The current
 library exposes `DataTable`, so the demo focuses on its complete API surface:
 
-- sortable columns with controlled sort state;
+- sortable columns with built-in (uncontrolled) sorting and a clear button;
 - controlled row selection, including select-all and indeterminate state;
 - custom cell rendering, formatted values, and row actions;
 - loading and empty content slots;

@@ -337,7 +337,12 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 										}
 									>
 										<Show
-											when={column.sortable && props.onSort}
+											when={
+												column.sortable &&
+												(!sortControlled ||
+													props.onSort ||
+													props.onSortChange)
+											}
 											fallback={column.label}
 										>
 											<button
@@ -346,23 +351,32 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 												onClick={() => changeSort(column.key)}
 											>
 												{column.label}
-												{sortKey() === column.key
-													? sortDirection() === 'asc'
-														? ' ▲'
-														: ' ▼'
-													: ''}
+												<span
+													class="data-table-sort-indicator"
+													aria-hidden="true"
+												>
+													{sortKey() === column.key
+														? sortDirection() === 'asc'
+															? '▲'
+															: '▼'
+														: ''}
+												</span>
 											</button>
+											{/* Hidden instead of removed so sorting never changes column widths. */}
 											<Show
 												when={
-													sortKey() === column.key &&
-													(!sortControlled ||
-														props.onSortClear ||
-														props.onSortChange)
+													!sortControlled ||
+													props.onSortClear ||
+													props.onSortChange
 												}
 											>
 												<button
 													type="button"
 													class="data-table-sort-clear"
+													classList={{
+														'data-table-sort-clear-hidden':
+															sortKey() !== column.key,
+													}}
 													aria-label="Clear sorting"
 													title="Clear sorting"
 													onClick={clearSort}
