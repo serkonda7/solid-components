@@ -6,16 +6,18 @@
       "name": "solid-components",
       "devDependencies": {
         "@biomejs/biome": "2.5.14",
+        "@tabler/icons-solidjs": "~3.48.0",
         "@types/bun": "1.4.2",
         "@vitest/browser-playwright": "^5.0.2",
-        "playwright": "^1.63.0",
+        "playwright": "~1.63.0",
         "solid-js": "~1.9.15",
         "typescript": "~7.0.2",
         "vite": "~8.3.0",
         "vite-plugin-solid": "~2.11.14",
-        "vitest": "^5.0.2",
+        "vitest": "~5.0.2",
       },
       "peerDependencies": {
+        "@tabler/icons-solidjs": ">=3.0.0",
         "solid-js": ">=1.9.0",
       },
     },
@@ -122,6 +124,10 @@
     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.9", "", { "os": "win32", "cpu": "x64" }, "sha512-Ip2mXoU0hM0boq3Rf+ekuT653OROSo6aSYcPT1VHE4q52KvyxgFkQgrgb/IEsxOuvQ2fZZbs8khJAyCEPM24/g=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+
+    "@tabler/icons": ["@tabler/icons@3.48.0", "", {}, "sha512-lQk06gVHNVBnJp0UOgtth54mcZBJM7rdYKsAxKOProj1bbSAx+/xiuOWfHlyvgdL3M+Y+I0HINrjHa3ygp8eXQ=="],
+
+    "@tabler/icons-solidjs": ["@tabler/icons-solidjs@3.48.0", "", { "dependencies": { "@tabler/icons": "3.48.0" }, "peerDependencies": { "solid-js": "^1.4.7" } }, "sha512-D989B/DXL6KlqO3dH19xe1TFWUx0BF6xcm0lAlhBD0LVHt756sMYnGxsLxJuTcXf2gJzgDxM6O3SbK9SssckpA=="],
 
     "@types/babel__core": ["@types/babel__core@7.20.5", "", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 

@@ -8,7 +8,7 @@ Reusable components for [SolidJS](https://www.solidjs.com/).
 
 ## 📦 Installation
 ```sh
-bun install @serkonda7/solid-components solid-js
+bun install @serkonda7/solid-components solid-js @tabler/icons-solidjs
 ```
 
 
@@ -26,6 +26,7 @@ import '@serkonda7/solid-components/styles.css'
 
 These components are available:
 - `DataTable` - generic table with optional sorting, row selection, actions, loading, empty states, and column customizer.
+- `Combobox` - searchable, accessible dropdown with keyboard navigation, option icons, a detail column, and an optional "Add …" entry.
 
 For the full API, examples, and agent notes, see [docs.md](docs.md).
 

@@ -58,12 +58,43 @@ const columns = [
 Full interactive coverage (sort, selection, custom cells, actions, loading, empty):
 `examples/App.tsx`.
 
+## Combobox usage
+
+Searchable single-select. It renders only the control, so pair it with your own
+`<label for={id}>` (or pass `ariaLabel`):
+
+```tsx
+<label for="site">Site</label>
+<Combobox
+  id="site"
+  value={siteId()}            // string; '' = nothing / the empty entry
+  onChange={setSiteId}        // omit for read-only
+  options={sites().map((s) => ({ value: s.id, label: s.name, detail: s.region, icon: IconMapPin }))}
+  emptyLabel="None"           // optional leading '' entry
+  onOpen={refetchSites}       // optional, runs on every open
+  onAdd={(query) => navigate(`/sites/add?name=${encodeURIComponent(query)}`)}
+  addLabel="Add Site"
+/>
+```
+
+- Typing filters by `label` and `detail` (case-insensitive substring). Arrow keys
+  wrap around and include the add entry; Enter picks, Escape closes (and stops
+  propagation so enclosing dialogs stay open). Focus never leaves the input; the
+  highlight is exposed via `aria-activedescendant` and kept scrolled into view.
+- `onAdd` pins an add entry at the end of the list and receives the trimmed search text.
+- Texts: `searchLabel` (open placeholder, default `Search`), `noMatchesLabel`
+  (default `No matching objects`), `addLabel` (default `Add`).
+- Options with `detail` render in two columns; `icon` is any
+  `Component<{ size?: number }>` (e.g. a tabler icon), also shown in the closed input.
+- The current value is mirrored in the input's `data-value` attribute.
+
 ## Add a component
 - Export it from `src/index.ts`; it is the package entry (`vite.config.ts` uses it).
 - Co-locate styles in `src/`; `scripts/build.ts` copies `src/styles.css` to `dist/`.
   Never edit `dist/` by hand.
 - Add a demo to `examples/App.tsx`.
-- No new runtime deps; use SolidJS (`solid-js` is a peer dep).
+- No new runtime deps; use SolidJS and `@tabler/icons-solidjs` for icons (both are
+  peer deps and listed as `external` in `vite.config.ts`).
 
 ## DataTable invariants (`src/data-table.tsx`)
 - Reactive props accept `T | Accessor<T>`; unwrap via `read()` (`src/data-table.tsx:63`).
@@ -82,7 +113,15 @@ Full interactive coverage (sort, selection, custom cells, actions, loading, empt
 - Customizer panel dismisses on outside `pointerdown` and `Escape` with cleanup in
   `createEffect`; keep both listeners paired.
 
+## Combobox invariants (`src/combobox.tsx`)
+- Option ids are `${id}-option-${index}` over the filtered list; the add entry takes
+  index `filtered.length`. Options `preventDefault` on `mousedown` so the input's
+  blur doesn't close the list before the click lands.
+- `onInput` reads the typed value before opening: opening resets the bound value.
+
 ## Styling contract (`src/styles.css`)
+- Combobox themes via `--combobox-*` vars (`border`, `bg`, `panel-bg`, `hover-bg`,
+  `muted`, `accent`) with the same fallback chain.
 - Theme via `--data-table-*` vars with fallbacks and `light-dark()`; `color-scheme`
   is inherited from the consumer, do not set it here.
 

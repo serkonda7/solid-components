@@ -6,6 +6,12 @@
  */
 
 export {
+	Combobox,
+	type ComboboxIcon,
+	type ComboboxOption,
+	type ComboboxProps,
+} from './combobox'
+export {
 	DataTable,
 	type DataTableColumn,
 	type DataTableProps,

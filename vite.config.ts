@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => ({
 		},
 		minify: mode === 'production',
 		rollupOptions: {
-			external: ['solid-js', 'solid-js/web'],
+			external: ['solid-js', 'solid-js/web', '@tabler/icons-solidjs'],
 		},
 	},
 }))

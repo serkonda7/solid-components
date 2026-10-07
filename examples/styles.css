@@ -80,3 +80,10 @@ button:hover {
 		flex-direction: column;
 	}
 }
+
+.combobox-demo {
+	display: grid;
+	gap: 8px;
+	max-width: 320px;
+	margin-top: 16px;
+}

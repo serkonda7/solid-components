@@ -1,6 +1,6 @@
 {
   "name": "@serkonda7/solid-components",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Reusable components for SolidJS",
   "license": "MIT",
   "author": "serkonda7",
@@ -39,17 +39,19 @@
   },
   "packageManager": "bun@1.4.2",
   "peerDependencies": {
+    "@tabler/icons-solidjs": ">=3.0.0",
     "solid-js": ">=1.9.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@tabler/icons-solidjs": "~3.48.0",
     "@types/bun": "1.4.2",
     "@vitest/browser-playwright": "^5.0.2",
-    "playwright": "^1.63.0",
+    "playwright": "~1.63.0",
     "solid-js": "~1.9.15",
     "typescript": "~7.0.2",
     "vite": "~8.3.0",
     "vite-plugin-solid": "~2.11.14",
-    "vitest": "^5.0.2"
+    "vitest": "~5.0.2"
   }
 }

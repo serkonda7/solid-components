@@ -1,5 +1,6 @@
+import { IconBulb, IconPlant, IconSpeakerphone } from '@tabler/icons-solidjs'
 import { createSignal, Show } from 'solid-js'
-import { DataTable, type DataTableColumn } from '../src'
+import { Combobox, type ComboboxOption, DataTable, type DataTableColumn } from '../src'
 import '../src/styles.css'
 import './styles.css'
 import './table-demo.css'
@@ -37,10 +38,21 @@ const columns: DataTableColumn<Product>[] = [
 	},
 ]
 
+const categoryIcons = { Lighting: IconBulb, Decor: IconPlant, Audio: IconSpeakerphone }
+
+const productOptions: ComboboxOption[] = products.map((product) => ({
+	value: product.id,
+	label: product.name,
+	detail: product.category,
+	icon: categoryIcons[product.category as keyof typeof categoryIcons],
+}))
+
 export default function App() {
 	const [selected, setSelected] = createSignal<number[]>([])
 	const [loading, setLoading] = createSignal(false)
 	const [empty, setEmpty] = createSignal(false)
+	const [product, setProduct] = createSignal('')
+	const [added, setAdded] = createSignal<string>()
 
 	return (
 		<main>
@@ -93,6 +105,29 @@ export default function App() {
 						</button>
 					)}
 				/>
+			</section>
+
+			<h1>Combobox example</h1>
+			<p>Type to filter, arrow keys to move, Enter to pick, Escape to close.</p>
+
+			<section class="combobox-demo">
+				<label for="product-combobox">Product</label>
+				<Combobox
+					id="product-combobox"
+					value={product()}
+					onChange={setProduct}
+					options={productOptions}
+					emptyLabel="No product"
+					onAdd={(query) => setAdded(query)}
+					addLabel="Add product"
+				/>
+				<p>
+					Selected value: <code>{product() || '(none)'}</code>
+					<Show when={added() !== undefined}>
+						{' '}
+						· Add requested with name <code>{added() || '(empty)'}</code>
+					</Show>
+				</p>
 			</section>
 		</main>
 	)
