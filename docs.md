@@ -93,8 +93,9 @@ Searchable single-select. It renders only the control, so pair it with your own
 - Co-locate styles in `src/`; `scripts/build.ts` copies `src/styles.css` to `dist/`.
   Never edit `dist/` by hand.
 - Add a demo to `examples/App.tsx`.
-- No new runtime deps; use SolidJS and `@tabler/icons-solidjs` for icons (both are
-  peer deps and listed as `external` in `vite.config.ts`).
+- No new runtime deps; use SolidJS (a peer dep, `external` in `vite.config.ts`) and
+  `@tabler/icons-solidjs` for icons (a dev dep, bundled into `dist/` so only
+  the used icons ship).
 
 ## DataTable invariants (`src/data-table.tsx`)
 - Reactive props accept `T | Accessor<T>`; unwrap via `read()` (`src/data-table.tsx:63`).

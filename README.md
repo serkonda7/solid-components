@@ -8,7 +8,7 @@ Reusable components for [SolidJS](https://www.solidjs.com/).
 
 ## 📦 Installation
 ```sh
-bun install @serkonda7/solid-components solid-js @tabler/icons-solidjs
+bun install @serkonda7/solid-components solid-js
 ```
 
 

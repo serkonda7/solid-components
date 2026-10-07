@@ -11,7 +11,9 @@ export default defineConfig(({ mode }) => ({
 		},
 		minify: mode === 'production',
 		rollupOptions: {
-			external: ['solid-js', 'solid-js/web', '@tabler/icons-solidjs'],
+			// Tabler icons are bundled (tree-shaken to the ones used), so apps need
+			// neither the package nor a way to shake its barrel entry.
+			external: ['solid-js', 'solid-js/web'],
 		},
 	},
 }))
