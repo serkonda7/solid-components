@@ -1,6 +1,14 @@
 import { IconBulb, IconPlant, IconSpeakerphone } from '@tabler/icons-solidjs'
 import { createSignal, Show } from 'solid-js'
-import { Combobox, type ComboboxOption, DataTable, type DataTableColumn } from '../src'
+import {
+	Combobox,
+	type ComboboxOption,
+	DataTable,
+	type DataTableColumn,
+	FilterTable,
+	type FilterTableValues,
+} from '../src'
+import { type Device, deviceColumns, deviceFilters, devices } from './devices'
 import '../src/styles.css'
 import './styles.css'
 import './table-demo.css'
@@ -47,12 +55,24 @@ const productOptions: ComboboxOption[] = products.map((product) => ({
 	icon: categoryIcons[product.category as keyof typeof categoryIcons],
 }))
 
+function deviceCell(device: Device, column: DataTableColumn<Device>) {
+	if (column.key === 'status') {
+		return (
+			<span class={`device-status device-status-${device.status.toLowerCase()}`}>
+				{device.status}
+			</span>
+		)
+	}
+	return column.getValue?.(device) ?? String(device[column.key as keyof Device])
+}
+
 export default function App() {
 	const [selected, setSelected] = createSignal<number[]>([])
 	const [loading, setLoading] = createSignal(false)
 	const [empty, setEmpty] = createSignal(false)
 	const [product, setProduct] = createSignal('')
 	const [added, setAdded] = createSignal<string>()
+	const [filterValues, setFilterValues] = createSignal<FilterTableValues>({})
 
 	return (
 		<main>
@@ -106,6 +126,29 @@ export default function App() {
 					)}
 				/>
 			</section>
+
+			<h1>FilterTable example</h1>
+			<p>
+				Device inventory: quick search, a grouped filter form, and removable filter pills.
+			</p>
+
+			<section class="table-card filter-table-demo">
+				<FilterTable
+					rows={devices}
+					columns={deviceColumns}
+					filters={deviceFilters}
+					getRowId={(device) => device.id}
+					getCell={deviceCell}
+					filterValues={filterValues}
+					onFilterValuesChange={setFilterValues}
+					defaultSort={{ key: 'name', direction: 'asc' }}
+					showColumnCustomizer
+					emptyContent={<p class="table-message">No devices match the filters.</p>}
+				/>
+			</section>
+			<p>
+				Filter values: <code>{JSON.stringify(filterValues())}</code>
+			</p>
 
 			<h1>Combobox example</h1>
 			<p>Type to filter, arrow keys to move, Enter to pick, Escape to close.</p>

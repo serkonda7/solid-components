@@ -37,3 +37,59 @@
 	color: #f08a84;
 	font-weight: 600;
 }
+
+.filter-table-demo {
+	padding: 12px 0 0;
+}
+
+.filter-table-demo .filter-table-tabs {
+	padding: 0 16px;
+}
+
+.filter-table-demo .data-table-toolbar,
+.filter-table-demo .filter-table-form {
+	padding: 0 16px;
+}
+
+.filter-table-demo .filter-table-form {
+	padding-bottom: 16px;
+}
+
+.device-status {
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.device-status-active {
+	background: rgb(64 192 87 / 16%);
+	color: #69db7c;
+}
+
+.device-status-planned {
+	background: rgb(110 168 254 / 16%);
+	color: #74c0fc;
+}
+
+.device-status-staged {
+	background: rgb(250 176 5 / 16%);
+	color: #ffd43b;
+}
+
+.device-status-offline {
+	background: rgb(155 157 165 / 16%);
+	color: #9b9da5;
+}
+
+.device-status-decommissioning {
+	background: rgb(240 138 132 / 16%);
+	color: #f08a84;
+}
+
+.filter-table-demo .data-table th,
+.filter-table-demo .data-table td {
+	padding: 10px 12px;
+	white-space: nowrap;
+}

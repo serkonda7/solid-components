@@ -45,6 +45,8 @@ export interface ComboboxProps {
 	onAdd?: (query: string) => void
 	/** Text of the pinned add entry. Defaults to `Add`. */
 	addLabel?: string
+	/** Placeholder while closed and nothing is selected; `emptyLabel` takes precedence. */
+	placeholder?: string
 	/** Placeholder while open and nothing is selected. Defaults to `Search`. */
 	searchLabel?: string
 	/** Shown when no option matches the search. Defaults to `No matching objects`. */
@@ -160,7 +162,7 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	const placeholder = (): string | undefined =>
 		open()
 			? (selected()?.label ?? props.emptyLabel ?? props.searchLabel ?? 'Search')
-			: props.emptyLabel
+			: (props.emptyLabel ?? props.placeholder)
 
 	return (
 		<div

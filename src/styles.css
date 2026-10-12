@@ -9,8 +9,15 @@
 
 .data-table-toolbar {
 	display: flex;
+	align-items: flex-start;
 	justify-content: flex-end;
+	gap: 0.5rem;
 	margin-bottom: 0.5rem;
+}
+
+.data-table-toolbar-start {
+	flex: 1;
+	min-width: 0;
 }
 
 .data-table-customizer {
@@ -354,4 +361,289 @@
 .combobox-list-detail > .combobox-option-add {
 	display: flex;
 	align-items: center;
+}
+
+/* FilterTable: Results/Filters tabs around a DataTable. */
+.filter-table-tabs {
+	display: flex;
+	gap: 0.25rem;
+	margin-bottom: 0.75rem;
+	border-bottom: 1px solid
+		var(--filter-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+}
+
+.filter-table-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin-bottom: -1px;
+	padding: 0.5rem 0.875rem;
+	border: 1px solid transparent;
+	border-radius: 0.375rem 0.375rem 0 0;
+	background: transparent;
+	color: var(
+		--filter-table-muted,
+		var(--text-secondary, light-dark(#616161, #9b9da5))
+	);
+	font: inherit;
+	cursor: pointer;
+}
+
+.filter-table-tab:hover {
+	background: transparent;
+	color: inherit;
+}
+
+.filter-table-tab[aria-selected="true"] {
+	border-color: var(
+			--filter-table-border,
+			var(--border, light-dark(#d0d0d0, #3a3e45))
+		)
+		var(--filter-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)))
+		transparent;
+	background: var(
+		--filter-table-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	color: inherit;
+	font-weight: 600;
+}
+
+.filter-table-badge {
+	min-width: 1.25rem;
+	padding: 0.05rem 0.4rem;
+	border-radius: 999px;
+	background: var(
+		--filter-table-accent,
+		var(--primary, light-dark(#1a66d6, #6ea8fe))
+	);
+	color: light-dark(#ffffff, #10141a);
+	font-size: 0.75em;
+	font-weight: 600;
+	text-align: center;
+}
+
+.filter-table-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.filter-table-input {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 0.375rem 0.5rem;
+	border: 1px solid
+		var(--filter-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 0.375rem;
+	background: var(
+		--filter-table-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	color: inherit;
+	font: inherit;
+}
+
+.filter-table-search {
+	position: relative;
+	flex: 0 1 16rem;
+	min-width: 10rem;
+}
+
+.filter-table-search .filter-table-input {
+	padding-left: 1.9rem;
+}
+
+.filter-table-search-icon {
+	position: absolute;
+	top: 50%;
+	left: 0.55rem;
+	transform: translateY(-50%);
+	color: var(
+		--filter-table-muted,
+		var(--text-secondary, light-dark(#616161, #9b9da5))
+	);
+	pointer-events: none;
+}
+
+.filter-table-pills,
+.filter-table-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.375rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.filter-table-pill,
+.filter-table-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.2rem 0.55rem;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	background: var(
+		--filter-table-pill-bg,
+		light-dark(rgb(26 102 214 / 12%), rgb(110 168 254 / 16%))
+	);
+	color: var(
+		--filter-table-accent,
+		var(--primary, light-dark(#1a66d6, #6ea8fe))
+	);
+	font: inherit;
+	font-size: 0.8125rem;
+	line-height: 1.4;
+}
+
+.filter-table-pill {
+	cursor: pointer;
+}
+
+.filter-table-pill:hover {
+	border-color: currentColor;
+	background: var(
+		--filter-table-pill-bg,
+		light-dark(rgb(26 102 214 / 12%), rgb(110 168 254 / 16%))
+	);
+}
+
+.filter-table-pill-clear {
+	background: transparent;
+	color: var(
+		--filter-table-muted,
+		var(--text-secondary, light-dark(#616161, #9b9da5))
+	);
+}
+
+.filter-table-pill-clear:hover {
+	background: transparent;
+}
+
+.filter-table-chip-remove {
+	display: inline-flex;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.filter-table-chip-remove:hover {
+	background: transparent;
+}
+
+.filter-table-multi {
+	display: grid;
+	gap: 0.375rem;
+	min-width: 0;
+}
+
+.filter-table-form {
+	/* Label column width and gap; group headings are indented by both so they
+	line up with the inputs. */
+	--filter-table-label-width: 9rem;
+	--filter-table-label-gap: 1rem;
+	display: grid;
+	gap: 1.25rem;
+	max-width: 40rem;
+}
+
+/* Groups are plain sections: a muted heading, separated by a thin rule. */
+.filter-table-fieldset {
+	display: grid;
+	gap: 0.5rem;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+.filter-table-fieldset + .filter-table-fieldset {
+	padding-top: 1.25rem;
+	border-top: 1px solid
+		var(--filter-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+}
+
+/* Floated so it lays out as a regular grid item instead of on the border. */
+.filter-table-legend {
+	float: left;
+	width: 100%;
+	margin-bottom: 0.25rem;
+	padding: 0 0 0
+		calc(var(--filter-table-label-width) + var(--filter-table-label-gap));
+	box-sizing: border-box;
+	color: var(
+		--filter-table-muted,
+		var(--text-secondary, light-dark(#616161, #9b9da5))
+	);
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+/* Labels right-aligned in a column next to their inputs. */
+.filter-table-field {
+	display: grid;
+	grid-template-columns: var(--filter-table-label-width) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--filter-table-label-gap);
+}
+
+.filter-table-label {
+	padding-top: calc(0.375rem + 1px);
+}
+
+.filter-table-form-actions {
+	display: flex;
+	justify-content: flex-end;
+	padding-top: 1.25rem;
+	border-top: 1px solid
+		var(--filter-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	gap: 0.5rem;
+}
+
+.filter-table-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.filter-table-button-primary {
+	border-color: var(
+		--filter-table-accent,
+		var(--primary, light-dark(#1a66d6, #6ea8fe))
+	);
+	background: var(
+		--filter-table-accent,
+		var(--primary, light-dark(#1a66d6, #6ea8fe))
+	);
+	color: light-dark(#ffffff, #10141a);
+	font-weight: 600;
+}
+
+.filter-table-button-primary:hover {
+	filter: brightness(1.1);
+	background: var(
+		--filter-table-accent,
+		var(--primary, light-dark(#1a66d6, #6ea8fe))
+	);
+}
+
+@media (max-width: 640px) {
+	.filter-table-field {
+		grid-template-columns: 1fr;
+		gap: 0.25rem;
+	}
+
+	.filter-table-label {
+		padding-top: 0;
+	}
+
+	.filter-table-legend {
+		padding-left: 0;
+	}
 }

@@ -18,3 +18,11 @@ export {
 	type DataTableSort,
 	type DataTableSortDirection,
 } from './data-table'
+export {
+	FilterTable,
+	type FilterTableFilter,
+	type FilterTableFilterType,
+	type FilterTableProps,
+	type FilterTableValue,
+	type FilterTableValues,
+} from './filter-table'

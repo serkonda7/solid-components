@@ -7,7 +7,10 @@ library exposes `DataTable`, so the demo focuses on its complete API surface:
 - controlled row selection, including select-all and indeterminate state;
 - custom cell rendering, formatted values, and row actions;
 - loading and empty content slots;
-- responsive styling and accessible table controls.
+- responsive styling and accessible table controls;
+- `FilterTable` over a network device inventory (`devices.ts`): quick search,
+  a grouped filter form with text, multi-select, and yes/no filters, and filter pills;
+- `Combobox` with icons, a detail column, and an add entry.
 
 ## Run locally
 

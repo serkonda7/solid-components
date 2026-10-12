@@ -1,9 +1,10 @@
 import { playwright } from '@vitest/browser-playwright'
 import solid from 'vite-plugin-solid'
 import { defineConfig } from 'vitest/config'
+import { tablerIcons } from './scripts/vite-tabler-icons.ts'
 
 export default defineConfig({
-	plugins: [solid()],
+	plugins: [tablerIcons(), solid()],
 	test: {
 		include: ['src/**/*.test.tsx'],
 		// vite-plugin-solid defaults to jsdom; tests run in a real browser instead.

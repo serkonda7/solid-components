@@ -58,6 +58,43 @@ const columns = [
 Full interactive coverage (sort, selection, custom cells, actions, loading, empty):
 `examples/App.tsx`.
 
+## FilterTable usage
+
+`FilterTable` wraps `DataTable` (all its props pass through) in
+Results/Filters tabs:
+
+```tsx
+const filters: FilterTableFilter<Device>[] = [
+  { key: 'name', label: 'Name', type: 'text' },
+  { key: 'site', label: 'Site', type: 'select', group: 'Location', options: siteOptions },
+  { key: 'active', label: 'Active', type: 'boolean', getValue: (d) => d.status === 'active' },
+]
+
+<FilterTable rows={devices} columns={columns} filters={filters} getRowId={(d) => d.id} />
+```
+
+- Results tab: quick search input (filters as you type; `quickSearch={false}`
+  hides it), one removable pill per applied value plus "Clear all", then the
+  table. Its badge shows the result count.
+- Filters tab: a form with one section per `group` (ungrouped first) under a muted
+  heading, separated by thin rules; labels sit in a fixed-width column. Edits stay a draft until "Search" (or Enter) applies them
+  and returns to Results; "Reset" clears all filters but keeps the quick search.
+  Its badge counts the applied filters.
+- Filter types: `text` (case-insensitive substring), `select` (multi-select via
+  `Combobox` + chips; matches any chosen value, row values may be arrays;
+  `options` default to the distinct row values), `boolean` (Any/Yes/No, matched
+  against `Boolean(value)`). Values come from `getValue(row)`, falling back to
+  `row[key]`; `match(row, value)` replaces the built-in matching.
+- Quick search matches `getSearchText(row)`, by default the rows' column values
+  (`sortValue` or `row[column.key]`).
+- State is a `FilterTableValues` record: `{ [filterKey]: string | string[], q }`
+  with inactive filters omitted, so it maps onto URL query params. Uncontrolled
+  by default (`defaultFilterValues`); controlled with `filterValues` +
+  `onFilterValuesChange`. `onFilterValuesChange` also fires when uncontrolled.
+- `manualFiltering` passes `rows` through unchanged, for server-side filtering.
+- Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`
+  (`Search`), `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`.
+
 ## Combobox usage
 
 Searchable single-select. It renders only the control, so pair it with your own
@@ -82,7 +119,7 @@ Searchable single-select. It renders only the control, so pair it with your own
   propagation so enclosing dialogs stay open). Focus never leaves the input; the
   highlight is exposed via `aria-activedescendant` and kept scrolled into view.
 - `onAdd` pins an add entry at the end of the list and receives the trimmed search text.
-- Texts: `searchLabel` (open placeholder, default `Search`), `noMatchesLabel`
+- Texts: `placeholder` (closed and empty, after `emptyLabel`), `searchLabel` (open placeholder, default `Search`), `noMatchesLabel`
   (default `No matching objects`), `addLabel` (default `Add`).
 - Options with `detail` render in two columns; `icon` is any
   `Component<{ size?: number }>` (e.g. a tabler icon), also shown in the closed input.
@@ -111,8 +148,19 @@ Searchable single-select. It renders only the control, so pair it with your own
 - Header markup must not change size with sort state; keep the fixed-width
   `.data-table-sort-indicator` (covered by `src/data-table.test.tsx`).
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
+- `toolbar` content renders at the start of the toolbar row; the row shows when
+  it or the customizer is present.
 - Customizer panel dismisses on outside `pointerdown` and `Escape` with cleanup in
   `createEffect`; keep both listeners paired.
+
+## FilterTable invariants (`src/filter-table.tsx`)
+- The quick search lives under the reserved key `q`; do not use it as a filter key.
+- Values are normalized (trimmed, empty strings/arrays dropped) before they are
+  stored or emitted.
+- Both tab panels stay mounted (`hidden`) so the table keeps its sort and column
+  state across tab switches.
+- Quick search and pills render in `DataTable`'s `toolbar` slot, beside the
+  column customizer.
 
 ## Combobox invariants (`src/combobox.tsx`)
 - Option ids are `${id}-option-${index}` over the filtered list; the add entry takes
@@ -121,6 +169,8 @@ Searchable single-select. It renders only the control, so pair it with your own
 - `onInput` reads the typed value before opening: opening resets the bound value.
 
 ## Styling contract (`src/styles.css`)
+- FilterTable themes via `--filter-table-*` vars (`border`, `bg`, `muted`,
+  `accent`, `pill-bg`) with the same fallback chain.
 - Combobox themes via `--combobox-*` vars (`border`, `bg`, `panel-bg`, `hover-bg`,
   `muted`, `accent`) with the same fallback chain.
 - Theme via `--data-table-*` vars with fallbacks and `light-dark()`; `color-scheme`

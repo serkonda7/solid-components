@@ -1,5 +1,6 @@
 import type { Accessor, JSX } from 'solid-js'
 import {
+	children,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -53,6 +54,8 @@ export interface DataTableProps<TRow> {
 	columnCustomizerTitle?: string
 	columnCustomizerShowAllLabel?: string
 	columnCustomizerResetLabel?: string
+	/** Content rendered at the start of the toolbar, before the column customizer. */
+	toolbar?: JSX.Element
 	loading?: boolean | Accessor<boolean>
 	empty?: boolean | Accessor<boolean>
 	loadingContent?: JSX.Element
@@ -81,6 +84,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const sortDirection = () =>
 		sortControlled ? read(props.sortDirection ?? 'asc') : (internalSort()?.direction ?? 'asc')
 	const showCustomizer = () => read(props.showColumnCustomizer ?? false)
+	const toolbar = children(() => props.toolbar)
 	const hasSelection = () => props.selected !== undefined && props.onSelectionChange !== undefined
 	const allSelected = () => {
 		const ids = selected()
@@ -244,63 +248,68 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	return (
 		<div class={`data-table-wrap${props.class ? ` ${props.class}` : ''}`}>
-			<Show when={showCustomizer()}>
+			<Show when={showCustomizer() || toolbar.toArray().length > 0}>
 				<div class="data-table-toolbar">
-					<div ref={customizerRoot} class="data-table-customizer">
-						<button
-							type="button"
-							class="data-table-customizer-button"
-							aria-haspopup="dialog"
-							aria-expanded={customizerOpen()}
-							aria-controls={panelId}
-							onClick={() => setCustomizerOpen((open) => !open)}
-						>
-							<span aria-hidden="true">⚙</span>{' '}
-							{props.columnCustomizerLabel ?? 'Columns'}
-						</button>
-						<Show when={customizerOpen()}>
-							<div
-								id={panelId}
-								role="dialog"
-								aria-label={props.columnCustomizerTitle ?? 'Customize columns'}
-								class="data-table-customizer-panel"
+					<Show when={toolbar.toArray().length > 0}>
+						<div class="data-table-toolbar-start">{toolbar()}</div>
+					</Show>
+					<Show when={showCustomizer()}>
+						<div ref={customizerRoot} class="data-table-customizer">
+							<button
+								type="button"
+								class="data-table-customizer-button"
+								aria-haspopup="dialog"
+								aria-expanded={customizerOpen()}
+								aria-controls={panelId}
+								onClick={() => setCustomizerOpen((open) => !open)}
 							>
-								<p class="data-table-customizer-title">
-									{props.columnCustomizerTitle ?? 'Shown columns'}
-								</p>
-								<ul class="data-table-customizer-list">
-									<For each={props.columns}>
-										{(column) => (
-											<li>
-												<label class="data-table-customizer-option">
-													<input
-														type="checkbox"
-														checked={isColumnVisible(column)}
-														disabled={column.toggleable === false}
-														onChange={(e) =>
-															toggleColumn(
-																column.key,
-																e.currentTarget.checked,
-															)
-														}
-													/>
-													{column.ariaLabel ?? column.label}
-												</label>
-											</li>
-										)}
-									</For>
-								</ul>
-								<div class="data-table-customizer-actions">
-									<button type="button" onClick={showAllColumns}>
-										{props.columnCustomizerShowAllLabel ?? 'Show all'}
-									</button>
-									<button type="button" onClick={resetColumns}>
-										{props.columnCustomizerResetLabel ?? 'Reset'}
-									</button>
+								<span aria-hidden="true">⚙</span>{' '}
+								{props.columnCustomizerLabel ?? 'Columns'}
+							</button>
+							<Show when={customizerOpen()}>
+								<div
+									id={panelId}
+									role="dialog"
+									aria-label={props.columnCustomizerTitle ?? 'Customize columns'}
+									class="data-table-customizer-panel"
+								>
+									<p class="data-table-customizer-title">
+										{props.columnCustomizerTitle ?? 'Shown columns'}
+									</p>
+									<ul class="data-table-customizer-list">
+										<For each={props.columns}>
+											{(column) => (
+												<li>
+													<label class="data-table-customizer-option">
+														<input
+															type="checkbox"
+															checked={isColumnVisible(column)}
+															disabled={column.toggleable === false}
+															onChange={(e) =>
+																toggleColumn(
+																	column.key,
+																	e.currentTarget.checked,
+																)
+															}
+														/>
+														{column.ariaLabel ?? column.label}
+													</label>
+												</li>
+											)}
+										</For>
+									</ul>
+									<div class="data-table-customizer-actions">
+										<button type="button" onClick={showAllColumns}>
+											{props.columnCustomizerShowAllLabel ?? 'Show all'}
+										</button>
+										<button type="button" onClick={resetColumns}>
+											{props.columnCustomizerResetLabel ?? 'Reset'}
+										</button>
+									</div>
 								</div>
-							</div>
-						</Show>
-					</div>
+							</Show>
+						</div>
+					</Show>
 				</div>
 			</Show>
 			<div class="data-table-scroll">
