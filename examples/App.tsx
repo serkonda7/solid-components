@@ -1,5 +1,5 @@
 import { IconBulb, IconPlant, IconSpeakerphone } from '@tabler/icons-solidjs'
-import { createSignal, Show } from 'solid-js'
+import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
 import {
 	Combobox,
 	type ComboboxOption,
@@ -68,9 +68,24 @@ function deviceCell(device: Device, column: DataTableColumn<Device>) {
 	return column.getValue?.(device) ?? String(device[column.key as keyof Device])
 }
 
+const pages = [
+	{ id: 'data-table', label: 'DataTable' },
+	{ id: 'filter-table', label: 'FilterTable' },
+	{ id: 'combobox', label: 'Combobox' },
+	{ id: 'search-bar', label: 'SearchBar' },
+] as const
+
+type PageId = (typeof pages)[number]['id']
+
+function readPage(): PageId {
+	const id = location.hash.slice(1)
+	return pages.find((page) => page.id === id)?.id ?? pages[0].id
+}
+
 const SAVED_FILTERS_KEY = 'solid-components-example-saved-filters'
 
 export default function App() {
+	const [page, setPage] = createSignal(readPage())
 	const [selected, setSelected] = createSignal<number[]>([])
 	const [loading, setLoading] = createSignal(false)
 	const [empty, setEmpty] = createSignal(false)
@@ -87,117 +102,152 @@ export default function App() {
 		setSavedFilters(next)
 	}
 
+	const onHashChange = () => {
+		setPage(readPage())
+		window.scrollTo(0, 0)
+	}
+	window.addEventListener('hashchange', onHashChange)
+	onCleanup(() => window.removeEventListener('hashchange', onHashChange))
+
 	return (
-		<main>
-			<h1>DataTable example</h1>
-			<p>Sorting, selection, custom cells, actions, loading, and empty states.</p>
+		<div class="layout">
+			<nav class="sidebar" aria-label="Examples">
+				<strong class="sidebar-title">Solid Components</strong>
+				<ul>
+					<For each={pages}>
+						{(item) => (
+							<li>
+								<a
+									href={`#${item.id}`}
+									aria-current={page() === item.id ? 'page' : undefined}
+								>
+									{item.label}
+								</a>
+							</li>
+						)}
+					</For>
+				</ul>
+			</nav>
+			<main>
+				<Switch>
+					<Match when={page() === 'data-table'}>
+						<h1>DataTable example</h1>
+						<p>Sorting, selection, custom cells, actions, loading, and empty states.</p>
 
-			<div class="actions">
-				<button type="button" onClick={() => setLoading((value) => !value)}>
-					{loading() ? 'Hide loading' : 'Show loading'}
-				</button>
-				<button type="button" onClick={() => setEmpty((value) => !value)}>
-					{empty() ? 'Show rows' : 'Show empty state'}
-				</button>
-				<Show when={selected().length > 0}>
-					<button type="button" onClick={() => setSelected([])}>
-						Clear selection ({selected().length})
-					</button>
-				</Show>
-			</div>
+						<div class="actions">
+							<button type="button" onClick={() => setLoading((value) => !value)}>
+								{loading() ? 'Hide loading' : 'Show loading'}
+							</button>
+							<button type="button" onClick={() => setEmpty((value) => !value)}>
+								{empty() ? 'Show rows' : 'Show empty state'}
+							</button>
+							<Show when={selected().length > 0}>
+								<button type="button" onClick={() => setSelected([])}>
+									Clear selection ({selected().length})
+								</button>
+							</Show>
+						</div>
 
-			<section class="table-card">
-				<header class="table-header">
-					<div>
-						<h2>Products</h2>
-						<p>Manage your inventory and availability.</p>
-					</div>
-					<span class="count">{products.length} items</span>
-				</header>
-				<DataTable
-					rows={() => (empty() ? [] : products)}
-					columns={columns}
-					getRowId={(product) => product.id}
-					selected={selected}
-					onSelectionChange={(ids) => setSelected(ids.map(Number))}
-					defaultSort={{ key: 'name', direction: 'asc' }}
-					showColumnCustomizer
-					loading={loading}
-					loadingContent={<p class="table-message">Loading products…</p>}
-					emptyContent={<p class="table-message">No products found.</p>}
-					getCell={(product, column) =>
-						column.key === 'stock' && product.stock === 0 ? (
-							<span class="out-of-stock">Out of stock</span>
-						) : (
-							(column.getValue?.(product) ?? null)
-						)
-					}
-					rowActions={(product) => (
-						<button type="button" aria-label={`Edit ${product.name}`}>
-							Edit
-						</button>
-					)}
-				/>
-			</section>
+						<section class="table-card">
+							<header class="table-header">
+								<div>
+									<h2>Products</h2>
+									<p>Manage your inventory and availability.</p>
+								</div>
+								<span class="count">{products.length} items</span>
+							</header>
+							<DataTable
+								rows={() => (empty() ? [] : products)}
+								columns={columns}
+								getRowId={(product) => product.id}
+								selected={selected}
+								onSelectionChange={(ids) => setSelected(ids.map(Number))}
+								defaultSort={{ key: 'name', direction: 'asc' }}
+								showColumnCustomizer
+								loading={loading}
+								loadingContent={<p class="table-message">Loading products…</p>}
+								emptyContent={<p class="table-message">No products found.</p>}
+								getCell={(product, column) =>
+									column.key === 'stock' && product.stock === 0 ? (
+										<span class="out-of-stock">Out of stock</span>
+									) : (
+										(column.getValue?.(product) ?? null)
+									)
+								}
+								rowActions={(product) => (
+									<button type="button" aria-label={`Edit ${product.name}`}>
+										Edit
+									</button>
+								)}
+							/>
+						</section>
+					</Match>
+					<Match when={page() === 'filter-table'}>
+						<h1>FilterTable example</h1>
+						<p>
+							Device inventory: quick search, a grouped filter form, removable filter
+							pills, and saved filters (kept in localStorage).
+						</p>
 
-			<h1>FilterTable example</h1>
-			<p>
-				Device inventory: quick search, a grouped filter form, removable filter pills, and
-				saved filters (kept in localStorage).
-			</p>
+						<section class="table-card filter-table-demo">
+							<FilterTable
+								rows={devices}
+								columns={deviceColumns}
+								filters={deviceFilters}
+								getRowId={(device) => device.id}
+								getCell={deviceCell}
+								filterValues={filterValues}
+								onFilterValuesChange={setFilterValues}
+								savedFilters={savedFilters}
+								onSavedFiltersChange={saveFilters}
+								defaultSort={{ key: 'name', direction: 'asc' }}
+								showColumnCustomizer
+								emptyContent={
+									<p class="table-message">No devices match the filters.</p>
+								}
+							/>
+						</section>
+						<p>
+							Filter values: <code>{JSON.stringify(filterValues())}</code>
+						</p>
+					</Match>
+					<Match when={page() === 'combobox'}>
+						<h1>Combobox example</h1>
+						<p>Type to filter, arrow keys to move, Enter to pick, Escape to close.</p>
 
-			<section class="table-card filter-table-demo">
-				<FilterTable
-					rows={devices}
-					columns={deviceColumns}
-					filters={deviceFilters}
-					getRowId={(device) => device.id}
-					getCell={deviceCell}
-					filterValues={filterValues}
-					onFilterValuesChange={setFilterValues}
-					savedFilters={savedFilters}
-					onSavedFiltersChange={saveFilters}
-					defaultSort={{ key: 'name', direction: 'asc' }}
-					showColumnCustomizer
-					emptyContent={<p class="table-message">No devices match the filters.</p>}
-				/>
-			</section>
-			<p>
-				Filter values: <code>{JSON.stringify(filterValues())}</code>
-			</p>
+						<section class="combobox-demo">
+							<label for="product-combobox">Product</label>
+							<Combobox
+								id="product-combobox"
+								value={product()}
+								onChange={setProduct}
+								options={productOptions}
+								emptyLabel="No product"
+								onAdd={(query) => setAdded(query)}
+								addLabel="Add product"
+							/>
+							<p>
+								Selected value: <code>{product() || '(none)'}</code>
+								<Show when={added() !== undefined}>
+									{' '}
+									· Add requested with name <code>{added() || '(empty)'}</code>
+								</Show>
+							</p>
+						</section>
+					</Match>
+					<Match when={page() === 'search-bar'}>
+						<h1>SearchBar example</h1>
+						<p>Press Ctrl/Cmd+K anywhere to focus the search.</p>
 
-			<h1>Combobox example</h1>
-			<p>Type to filter, arrow keys to move, Enter to pick, Escape to close.</p>
-
-			<section class="combobox-demo">
-				<label for="product-combobox">Product</label>
-				<Combobox
-					id="product-combobox"
-					value={product()}
-					onChange={setProduct}
-					options={productOptions}
-					emptyLabel="No product"
-					onAdd={(query) => setAdded(query)}
-					addLabel="Add product"
-				/>
-				<p>
-					Selected value: <code>{product() || '(none)'}</code>
-					<Show when={added() !== undefined}>
-						{' '}
-						· Add requested with name <code>{added() || '(empty)'}</code>
-					</Show>
-				</p>
-			</section>
-
-			<h1>SearchBar example</h1>
-			<p>Press Ctrl/Cmd+K anywhere to focus the search.</p>
-
-			<section class="search-bar-demo">
-				<SearchBar value={search()} onInput={setSearch} />
-				<p>
-					Query: <code>{search() || '(empty)'}</code>
-				</p>
-			</section>
-		</main>
+						<section class="search-bar-demo">
+							<SearchBar value={search()} onInput={setSearch} />
+							<p>
+								Query: <code>{search() || '(empty)'}</code>
+							</p>
+						</section>
+					</Match>
+				</Switch>
+			</main>
+		</div>
 	)
 }

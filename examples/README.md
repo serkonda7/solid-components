@@ -22,4 +22,5 @@ bun install
 bun run examples
 ```
 
-Then open `http://localhost:5175`.
+Then open `http://localhost:5175`. A sidebar switches between the examples; each one
+has its own URL hash (for example `#filter-table`).
