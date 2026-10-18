@@ -1,3 +1,4 @@
+import { IconChevronDown, IconChevronUp, IconMenu } from '@tabler/icons-solidjs'
 import type { Accessor, JSX } from 'solid-js'
 import {
 	children,
@@ -49,11 +50,17 @@ export interface DataTableProps<TRow> {
 	visibleColumns?: string[] | Accessor<string[]>
 	defaultVisibleColumns?: string[]
 	onVisibleColumnsChange?: (visibleKeys: string[]) => void
+	/** Controlled column order as column keys; pair with `onColumnOrderChange`. */
+	columnOrder?: string[] | Accessor<string[]>
+	defaultColumnOrder?: string[]
+	onColumnOrderChange?: (orderedKeys: string[]) => void
 	showColumnCustomizer?: boolean | Accessor<boolean>
 	columnCustomizerLabel?: string
 	columnCustomizerTitle?: string
 	columnCustomizerShowAllLabel?: string
 	columnCustomizerResetLabel?: string
+	columnCustomizerMoveUpLabel?: string
+	columnCustomizerMoveDownLabel?: string
 	/** Content rendered at the start of the toolbar, before the column customizer. */
 	toolbar?: JSX.Element
 	loading?: boolean | Accessor<boolean>
@@ -108,8 +115,24 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 			? read(props.visibleColumns)
 			: (uncontrolledVisible() ?? defaultVisibleKeys())
 	const visibleSet = createMemo(() => new Set(visibleKeys()))
+
+	const [uncontrolledOrder, setUncontrolledOrder] = createSignal<string[] | undefined>(undefined)
+	/** Columns sorted by `keys`; unknown keys are dropped, unlisted columns appended. */
+	function columnsInOrder(keys: string[]): DataTableColumn<TRow>[] {
+		const byKey = new Map(props.columns.map((column) => [column.key, column] as const))
+		const ordered = [...new Set(keys)].flatMap((key) => byKey.get(key) ?? [])
+		const placed = new Set(ordered)
+		return [...ordered, ...props.columns.filter((column) => !placed.has(column))]
+	}
+	const orderedColumns = createMemo(() =>
+		columnsInOrder(
+			props.columnOrder !== undefined
+				? read(props.columnOrder)
+				: (uncontrolledOrder() ?? props.defaultColumnOrder ?? []),
+		),
+	)
 	const visibleColumns = createMemo(() =>
-		props.columns.filter(
+		orderedColumns().filter(
 			(column) => column.toggleable === false || visibleSet().has(column.key),
 		),
 	)
@@ -189,9 +212,40 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		setVisibleKeys(allToggleableKeys())
 	}
 
+	function setColumnOrder(next: string[]): void {
+		if (props.columnOrder === undefined) setUncontrolledOrder(next)
+		props.onColumnOrderChange?.(next)
+	}
+
+	/** Moves the column with `key` to `index` within the current order. */
+	function moveColumn(key: string, index: number): void {
+		const keys = orderedColumns().map((column) => column.key)
+		const from = keys.indexOf(key)
+		if (from === -1 || index < 0 || index >= keys.length || index === from) return
+		keys.splice(from, 1)
+		keys.splice(index, 0, key)
+		setColumnOrder(keys)
+	}
+
+	/** Moves a column one step from its move button, keeping focus on the moved item. */
+	function moveColumnBy(button: HTMLButtonElement, key: string, delta: number): void {
+		const index = orderedColumns().findIndex((column) => column.key === key)
+		moveColumn(key, index + delta)
+		// Reordering may detach the focused button; if it is now disabled at the
+		// edge, hand focus to its sibling.
+		const buttons = button.parentElement?.querySelectorAll<HTMLButtonElement>(
+			'.data-table-customizer-move',
+		)
+		const target = button.disabled ? [...(buttons ?? [])].find((b) => !b.disabled) : button
+		target?.focus()
+	}
+
 	function resetColumns(): void {
 		setVisibleKeys(defaultVisibleKeys())
+		setColumnOrder(columnsInOrder(props.defaultColumnOrder ?? []).map((column) => column.key))
 	}
+
+	const [draggedKey, setDraggedKey] = createSignal<string | undefined>()
 
 	const customizerId = createUniqueId()
 	const panelId = `${customizerId}-panel`
@@ -277,9 +331,39 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 										{props.columnCustomizerTitle ?? 'Shown columns'}
 									</p>
 									<ul class="data-table-customizer-list">
-										<For each={props.columns}>
-											{(column) => (
-												<li>
+										<For each={orderedColumns()}>
+											{(column, index) => (
+												<li
+													class="data-table-customizer-item"
+													classList={{
+														'data-table-customizer-item-dragging':
+															draggedKey() === column.key,
+													}}
+													draggable="true"
+													onDragStart={(e) => {
+														setDraggedKey(column.key)
+														e.dataTransfer?.setData(
+															'text/plain',
+															column.key,
+														)
+														if (e.dataTransfer) {
+															e.dataTransfer.effectAllowed = 'move'
+														}
+													}}
+													onDragOver={(e) => {
+														const key = draggedKey()
+														if (key === undefined) return
+														e.preventDefault()
+														moveColumn(key, index())
+													}}
+													onDrop={(e) => e.preventDefault()}
+													onDragEnd={() => setDraggedKey(undefined)}
+												>
+													<IconMenu
+														class="data-table-customizer-grip"
+														size={14}
+														aria-hidden="true"
+													/>
 													<label class="data-table-customizer-option">
 														<input
 															type="checkbox"
@@ -294,6 +378,44 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 														/>
 														{column.ariaLabel ?? column.label}
 													</label>
+													<button
+														type="button"
+														class="data-table-customizer-move"
+														aria-label={`${props.columnCustomizerMoveUpLabel ?? 'Move up'}: ${column.ariaLabel ?? column.label}`}
+														disabled={index() === 0}
+														onClick={(e) =>
+															moveColumnBy(
+																e.currentTarget,
+																column.key,
+																-1,
+															)
+														}
+													>
+														<IconChevronUp
+															size={14}
+															aria-hidden="true"
+														/>
+													</button>
+													<button
+														type="button"
+														class="data-table-customizer-move"
+														aria-label={`${props.columnCustomizerMoveDownLabel ?? 'Move down'}: ${column.ariaLabel ?? column.label}`}
+														disabled={
+															index() === orderedColumns().length - 1
+														}
+														onClick={(e) =>
+															moveColumnBy(
+																e.currentTarget,
+																column.key,
+																1,
+															)
+														}
+													>
+														<IconChevronDown
+															size={14}
+															aria-hidden="true"
+														/>
+													</button>
 												</li>
 											)}
 										</For>

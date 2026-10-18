@@ -1,6 +1,6 @@
 import { render } from 'solid-js/web'
 import { afterEach, expect, test } from 'vitest'
-import { DataTable, type DataTableColumn } from '.'
+import { DataTable, type DataTableColumn, type DataTableProps } from '.'
 import './styles.css'
 
 type Row = { id: number; name: string; price: number }
@@ -80,4 +80,69 @@ test('clicking a header cycles asc, desc, unsorted', () => {
 	name.click()
 	expect(th?.getAttribute('aria-sort')).toBe('none')
 	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
+})
+
+function headers(container: HTMLElement): string[] {
+	return [...container.querySelectorAll('thead th')].map((th) => th.textContent ?? '')
+}
+
+function moveButton(container: HTMLElement, label: string): HTMLButtonElement {
+	const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+	if (!button) throw new Error(`No button ${label}`)
+	return button
+}
+
+function mountCustomizer(extra: Partial<DataTableProps<Row>> = {}): HTMLElement {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<DataTable
+				rows={rows}
+				columns={columns}
+				getRowId={(row) => row.id}
+				showColumnCustomizer
+				{...extra}
+			/>
+		),
+		container,
+	)
+	container.querySelector<HTMLButtonElement>('.data-table-customizer-button')?.click()
+	return container
+}
+
+test('customizer moves columns and reset restores the order', () => {
+	const changes: string[][] = []
+	const container = mountCustomizer({ onColumnOrderChange: (keys) => changes.push(keys) })
+
+	moveButton(container, 'Move down: Name').click()
+	expect(headers(container)).toEqual(['Price', 'Name', 'ID'])
+	expect(columnText(container, 1)).toEqual(['B', 'A', 'C'])
+	expect(document.activeElement?.getAttribute('aria-label')).toBe('Move down: Name')
+
+	moveButton(container, 'Move up: ID').click()
+	expect(headers(container)).toEqual(['Price', 'ID', 'Name'])
+	expect(moveButton(container, 'Move up: Price').disabled).toBe(true)
+	expect(changes).toEqual([
+		['price', 'name', 'id'],
+		['price', 'id', 'name'],
+	])
+
+	container
+		.querySelectorAll<HTMLButtonElement>('.data-table-customizer-actions button')[1]
+		?.click()
+	expect(headers(container)).toEqual(['Name', 'Price', 'ID'])
+})
+
+test('column order can be controlled', () => {
+	const changes: string[][] = []
+	const container = mountCustomizer({
+		columnOrder: ['id', 'unknown', 'name'],
+		onColumnOrderChange: (keys) => changes.push(keys),
+	})
+	expect(headers(container)).toEqual(['ID', 'Name', 'Price'])
+
+	moveButton(container, 'Move down: ID').click()
+	expect(changes).toEqual([['name', 'id', 'price']])
+	expect(headers(container)).toEqual(['ID', 'Name', 'Price'])
 })

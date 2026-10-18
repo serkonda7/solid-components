@@ -83,6 +83,7 @@ function readPage(): PageId {
 }
 
 const SAVED_FILTERS_KEY = 'solid-components-example-saved-filters'
+const COLUMN_ORDER_KEY = 'solid-components-example-column-order'
 
 export default function App() {
 	const [page, setPage] = createSignal(readPage())
@@ -100,6 +101,15 @@ export default function App() {
 	function saveFilters(next: FilterTableSavedFilter[]): void {
 		localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next))
 		setSavedFilters(next)
+	}
+
+	const [columnOrder, setColumnOrder] = createSignal<string[]>(
+		JSON.parse(localStorage.getItem(COLUMN_ORDER_KEY) ?? '[]'),
+	)
+
+	function saveColumnOrder(next: string[]): void {
+		localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(next))
+		setColumnOrder(next)
 	}
 
 	const onHashChange = () => {
@@ -186,7 +196,7 @@ export default function App() {
 						<h1>FilterTable example</h1>
 						<p>
 							Device inventory: quick search, a grouped filter form, removable filter
-							pills, and saved filters (kept in localStorage).
+							pills, saved filters, and column order (kept in localStorage).
 						</p>
 
 						<section class="table-card filter-table-demo">
@@ -200,6 +210,8 @@ export default function App() {
 								onFilterValuesChange={setFilterValues}
 								savedFilters={savedFilters}
 								onSavedFiltersChange={saveFilters}
+								columnOrder={columnOrder}
+								onColumnOrderChange={saveColumnOrder}
 								defaultSort={{ key: 'name', direction: 'asc' }}
 								showColumnCustomizer
 								emptyContent={

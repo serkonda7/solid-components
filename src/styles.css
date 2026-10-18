@@ -79,11 +79,51 @@
 	gap: 0.375rem;
 }
 
+.data-table-customizer-item {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	border-radius: 0.25rem;
+}
+
+.data-table-customizer-item-dragging {
+	opacity: 0.5;
+}
+
+.data-table-customizer-grip {
+	flex: none;
+	opacity: 0.5;
+	cursor: grab;
+}
+
 .data-table-customizer-option {
 	display: flex;
+	flex: 1;
 	align-items: center;
 	gap: 0.5rem;
 	cursor: pointer;
+}
+
+.data-table-customizer-move {
+	display: inline-flex;
+	padding: 0.125rem;
+	border: 0;
+	border-radius: 0.25rem;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+}
+
+.data-table-customizer-move:hover:not(:disabled) {
+	background: var(
+		--data-table-customizer-hover-bg,
+		var(--surface-hover, light-dark(#f5f5f5, #292d33))
+	);
+}
+
+.data-table-customizer-move:disabled {
+	opacity: 0.3;
+	cursor: default;
 }
 
 .data-table-customizer-option:has(input:disabled) {

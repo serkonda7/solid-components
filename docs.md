@@ -37,7 +37,8 @@ unsorted; clicking another header starts it at `asc`.
 
 ### Column customizer
 Opt in with `showColumnCustomizer`. The table renders a "Columns" button with a
-dialog listing every column as a checkbox:
+dialog listing every column as a checkbox, in display order. Columns are
+reordered by dragging an item or with its move up/down buttons:
 
 ```tsx
 const columns = [
@@ -51,9 +52,14 @@ const columns = [
 - Uncontrolled by default; use `defaultVisibleColumns` for the initial state.
 - Controlled with `visibleColumns` + `onVisibleColumnsChange` to persist the
   selection
-- `Show all` / `Reset` restore all columns or the defaults.
+- Order is uncontrolled by default; use `defaultColumnOrder` (column keys) for the
+  initial order. Controlled with `columnOrder` + `onColumnOrderChange`. Columns
+  missing from the order are appended in `columns` order; unknown keys are ignored.
+- `Show all` restores all columns; `Reset` restores the default visibility and order.
 - Labels can be customized via `columnCustomizerLabel`, `columnCustomizerTitle`,
-  `columnCustomizerShowAllLabel`, and `columnCustomizerResetLabel`.
+  `columnCustomizerShowAllLabel`, `columnCustomizerResetLabel`,
+  `columnCustomizerMoveUpLabel`, and `columnCustomizerMoveDownLabel`.
+- `FilterTable` passes all of these through to its `DataTable`.
 
 Full interactive coverage (sort, selection, custom cells, actions, loading, empty):
 `examples/App.tsx`.
@@ -195,6 +201,9 @@ plugins: [tablerIcons(), solid()] // before solid()
   Select-all uses an `indeterminate` effect on a ref; keep it when refactoring.
 - Visibility state drops unknown keys and omits `toggleable: false` columns from
   tracking (they stay visible implicitly); output keys follow `columns` order.
+- Order state (`columnOrder`) is separate from visibility and always lists every
+  column key, `toggleable: false` columns included. Customizer move buttons
+  restore focus after reordering (covered by `src/data-table.test.tsx`).
 - Header markup must not change size with sort state; keep the fixed-width
   `.data-table-sort-indicator` (covered by `src/data-table.test.tsx`).
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
