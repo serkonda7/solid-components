@@ -31,7 +31,7 @@
   "scripts": {
     "lint": "biome check --write",
     "lint:ci": "biome ci",
-    "check": "tsc --noEmit",
+    "check": "bun check",
     "test": "vitest run",
     "examples": "vite --config examples/vite.config.ts",
     "build:dev": "bun run scripts/build.ts --dev",
@@ -41,26 +41,26 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "bun@1.4.2",
-  "peerDependencies": {
-    "solid-js": ">=1.9.0",
-    "vite": ">=6.0.0"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    }
-  },
+  "packageManager": "bun@1.4.3",
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@tabler/icons-solidjs": "~3.49.0",
-    "@types/bun": "1.4.2",
-    "@vitest/browser-playwright": "~5.0.4",
+    "@types/bun": "1.4.3",
+    "@vitest/browser-playwright": "~5.0.5",
     "playwright": "~1.64.0",
     "solid-js": "~1.9.17",
     "typescript": "~7.0.2",
     "vite": "~8.3.4",
     "vite-plugin-solid": "~2.11.14",
-    "vitest": "~5.0.4"
+    "vitest": "~5.0.5"
+  },
+  "peerDependencies": {
+    "solid-js": ">=1.9.0",
+    "vite": ">=8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }
