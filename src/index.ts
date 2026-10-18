@@ -26,3 +26,7 @@ export {
 	type FilterTableValue,
 	type FilterTableValues,
 } from './filter-table'
+export {
+	SearchBar,
+	type SearchBarProps,
+} from './search-bar'

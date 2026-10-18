@@ -125,6 +125,47 @@ Searchable single-select. It renders only the control, so pair it with your own
   `Component<{ size?: number }>` (e.g. a tabler icon), also shown in the closed input.
 - The current value is mirrored in the input's `data-value` attribute.
 
+## SearchBar usage
+
+Controlled search input with a leading icon, a clear button while filled, and a
+global shortcut hint:
+
+```tsx
+<SearchBar value={query()} onInput={setQuery} ariaLabel="Search books" placeholder="Search…" />
+```
+
+- Ctrl/Cmd+K anywhere on the page focuses and selects the input (`preventDefault`
+  stops the browser's own binding). Change the key with `shortcutKey`; `false`
+  disables the shortcut, the hint and `aria-keyshortcuts`.
+- While empty a `<kbd>` hint (`Ctrl K`, override with `shortcutLabel`) fills the
+  trailing slot; it is hidden on `(pointer: coarse)` devices. While filled the
+  clear button replaces it and calls `onInput('')`.
+- Texts: `ariaLabel` (default `Search`), `placeholder` (default `Search…`),
+  `clearLabel` (default `Clear search`).
+- `class` is added to the wrapper (`.search-bar`), e.g. to cap its width.
+
+## Vite plugin (`@serkonda7/solid-components/vite`, `src/vite.ts`)
+
+`tablerIcons()` is for apps that import `@tabler/icons-solidjs` themselves; the
+components don't need it because `dist/` bundles their icons. `vite-plugin-solid`
+adds the `solid` export condition, which resolves the package to its source
+barrel: in dev that is ~6000 separate module requests and the page hangs.
+
+```ts
+import { tablerIcons } from '@serkonda7/solid-components/vite'
+plugins: [tablerIcons(), solid()] // before solid()
+```
+
+- Rewrites `import { IconX, IconY as Y } from '@tabler/icons-solidjs'` to per-icon
+  default imports (dev and build); `type` specifiers are dropped. The package is
+  resolved from each importer, so it uses the app's own install.
+- Never falls back to the barrel: namespace/default/dynamic imports, re-exports,
+  and unknown names fail the transform. In dev, any other resolution of the
+  package root is an error naming the importer, and the package is excluded from
+  `optimizeDeps`. Don't add an alias or `vite-plugin-entry-shaking` alongside it.
+- Runs in Node: `scripts/build.ts` bundles it with `Bun.build` into `dist/vite.js`,
+  separate from the browser entry. `vite` is an optional peer dependency.
+
 ## Add a component
 - Export it from `src/index.ts`; it is the package entry (`vite.config.ts` uses it).
 - Co-locate styles in `src/`; `scripts/build.ts` copies `src/styles.css` to `dist/`.
@@ -168,9 +209,16 @@ Searchable single-select. It renders only the control, so pair it with your own
   blur doesn't close the list before the click lands.
 - `onInput` reads the typed value before opening: opening resets the bound value.
 
+## SearchBar invariants (`src/search-bar.tsx`)
+- The keydown listener is registered on `document` in `onMount` and removed in
+  `onCleanup`; it ignores Shift/Alt combinations so it doesn't shadow other bindings.
+- The hint and the clear button share the trailing slot, so only one renders at a time.
+
 ## Styling contract (`src/styles.css`)
 - FilterTable themes via `--filter-table-*` vars (`border`, `bg`, `muted`,
   `accent`, `pill-bg`) with the same fallback chain.
+- SearchBar themes via `--search-bar-*` vars (`border`, `bg`, `muted`, `hover-bg`)
+  with the same fallback chain.
 - Combobox themes via `--combobox-*` vars (`border`, `bg`, `panel-bg`, `hover-bg`,
   `muted`, `accent`) with the same fallback chain.
 - Theme via `--data-table-*` vars with fallbacks and `light-dark()`; `color-scheme`

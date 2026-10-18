@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
+import { tablerIcons } from './src/vite.ts'
 
 export default defineConfig(({ mode }) => ({
-	plugins: [solidPlugin()],
+	plugins: [tablerIcons(), solidPlugin()],
 	build: {
 		lib: {
 			entry: './src/index.ts',

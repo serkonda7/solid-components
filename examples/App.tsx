@@ -7,6 +7,7 @@ import {
 	type DataTableColumn,
 	FilterTable,
 	type FilterTableValues,
+	SearchBar,
 } from '../src'
 import { type Device, deviceColumns, deviceFilters, devices } from './devices'
 import '../src/styles.css'
@@ -72,6 +73,7 @@ export default function App() {
 	const [empty, setEmpty] = createSignal(false)
 	const [product, setProduct] = createSignal('')
 	const [added, setAdded] = createSignal<string>()
+	const [search, setSearch] = createSignal('')
 	const [filterValues, setFilterValues] = createSignal<FilterTableValues>({})
 
 	return (
@@ -170,6 +172,16 @@ export default function App() {
 						{' '}
 						· Add requested with name <code>{added() || '(empty)'}</code>
 					</Show>
+				</p>
+			</section>
+
+			<h1>SearchBar example</h1>
+			<p>Press Ctrl/Cmd+K anywhere to focus the search.</p>
+
+			<section class="search-bar-demo">
+				<SearchBar value={search()} onInput={setSearch} />
+				<p>
+					Query: <code>{search() || '(empty)'}</code>
 				</p>
 			</section>
 		</main>

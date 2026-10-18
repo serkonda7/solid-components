@@ -1,7 +1,7 @@
 import { playwright } from '@vitest/browser-playwright'
 import solid from 'vite-plugin-solid'
 import { defineConfig } from 'vitest/config'
-import { tablerIcons } from './scripts/vite-tabler-icons.ts'
+import { tablerIcons } from './src/vite.ts'
 
 export default defineConfig({
 	plugins: [tablerIcons(), solid()],

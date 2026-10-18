@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import solid from 'vite-plugin-solid'
-import { tablerIcons } from '../scripts/vite-tabler-icons.ts'
+import { tablerIcons } from '../src/vite.ts'
 
 export default defineConfig({
 	root: 'examples',
