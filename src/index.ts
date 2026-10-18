@@ -23,6 +23,7 @@ export {
 	type FilterTableFilter,
 	type FilterTableFilterType,
 	type FilterTableProps,
+	type FilterTableSavedFilter,
 	type FilterTableValue,
 	type FilterTableValues,
 } from './filter-table'

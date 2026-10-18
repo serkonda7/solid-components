@@ -1,6 +1,12 @@
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, expect, test, vi } from 'vitest'
-import { type DataTableColumn, FilterTable, type FilterTableFilter } from '.'
+import {
+	type DataTableColumn,
+	FilterTable,
+	type FilterTableFilter,
+	type FilterTableSavedFilter,
+} from '.'
 import './styles.css'
 
 type Row = { id: number; name: string; category: string; stock: number }
@@ -121,4 +127,71 @@ test('filter form applies on submit and pills remove filters', () => {
 	container.querySelector<HTMLButtonElement>('.filter-table-pill-clear')?.click()
 	expect(names(container)).toHaveLength(4)
 	expect(container.querySelector('.filter-table-pills')).toBeNull()
+})
+
+test('saved filters are applied, saved, and deleted', async () => {
+	const onSavedChange = vi.fn()
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(() => {
+		const [saved, setSaved] = createSignal<FilterTableSavedFilter[]>([
+			{ name: 'Lighting', values: { category: ['Lighting'] } },
+		])
+		return (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+				savedFilters={saved}
+				onSavedFiltersChange={(next) => {
+					onSavedChange(next)
+					setSaved(next)
+				}}
+			/>
+		)
+	}, container)
+
+	const picker = container.querySelector<HTMLInputElement>('input[aria-label="Saved filters"]')
+	if (!picker) throw new Error('No saved filter picker')
+	type(picker, 'light')
+	press(picker, 'Enter')
+	expect(names(container)).toEqual(['Lamp', 'Spotlight'])
+	expect(picker.value).toBe('Lighting')
+
+	const search = container.querySelector<HTMLInputElement>('input[type="search"]')
+	if (!search) throw new Error('No quick search')
+	type(search, 'spot')
+	// No saved filter matches the edited values any more.
+	expect(picker.value).toBe('')
+
+	container.querySelector<HTMLButtonElement>('.filter-table-pill-save')?.click()
+	const name = container.querySelector<HTMLInputElement>('input[aria-label="Filter name"]')
+	if (!name) throw new Error('No name input')
+	type(name, ' Spotlights ')
+	container.querySelector<HTMLButtonElement>('.filter-table-save button[type="submit"]')?.click()
+	expect(onSavedChange).toHaveBeenLastCalledWith([
+		{ name: 'Lighting', values: { category: ['Lighting'] } },
+		{ name: 'Spotlights', values: { category: ['Lighting'], q: 'spot' } },
+	])
+	expect(container.querySelector('.filter-table-save')).toBeNull()
+	expect(picker.value).toBe('Spotlights')
+
+	container
+		.querySelector<HTMLButtonElement>('button[aria-label="Delete saved filter Spotlights"]')
+		?.click()
+	expect(onSavedChange).toHaveBeenLastCalledWith([
+		{ name: 'Lighting', values: { category: ['Lighting'] } },
+	])
+	// Deleting keeps the applied filters.
+	expect(names(container)).toEqual(['Spotlight'])
+})
+
+test('saving is disabled without savedFilters', () => {
+	const container = mount()
+	tab(container, 'Filters').click()
+	type(input(container, 'Name'), 'lamp')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(container.querySelector('.filter-table-pill-save')).toBeNull()
+	expect(container.querySelector('input[aria-label="Saved filters"]')).toBeNull()
 })

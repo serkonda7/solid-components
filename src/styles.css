@@ -522,6 +522,29 @@
 	background: transparent;
 }
 
+.filter-table-saved {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	flex: 0 1 14rem;
+	min-width: 9rem;
+}
+
+.filter-table-saved > :first-child {
+	flex: 1;
+	min-width: 0;
+}
+
+.filter-table-save {
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.filter-table-save .filter-table-input {
+	width: 12rem;
+}
+
 .filter-table-chip-remove {
 	display: inline-flex;
 	padding: 0;

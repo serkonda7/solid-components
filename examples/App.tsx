@@ -6,6 +6,7 @@ import {
 	DataTable,
 	type DataTableColumn,
 	FilterTable,
+	type FilterTableSavedFilter,
 	type FilterTableValues,
 	SearchBar,
 } from '../src'
@@ -67,6 +68,8 @@ function deviceCell(device: Device, column: DataTableColumn<Device>) {
 	return column.getValue?.(device) ?? String(device[column.key as keyof Device])
 }
 
+const SAVED_FILTERS_KEY = 'solid-components-example-saved-filters'
+
 export default function App() {
 	const [selected, setSelected] = createSignal<number[]>([])
 	const [loading, setLoading] = createSignal(false)
@@ -75,6 +78,14 @@ export default function App() {
 	const [added, setAdded] = createSignal<string>()
 	const [search, setSearch] = createSignal('')
 	const [filterValues, setFilterValues] = createSignal<FilterTableValues>({})
+	const [savedFilters, setSavedFilters] = createSignal<FilterTableSavedFilter[]>(
+		JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY) ?? '[]'),
+	)
+
+	function saveFilters(next: FilterTableSavedFilter[]): void {
+		localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next))
+		setSavedFilters(next)
+	}
 
 	return (
 		<main>
@@ -131,7 +142,8 @@ export default function App() {
 
 			<h1>FilterTable example</h1>
 			<p>
-				Device inventory: quick search, a grouped filter form, and removable filter pills.
+				Device inventory: quick search, a grouped filter form, removable filter pills, and
+				saved filters (kept in localStorage).
 			</p>
 
 			<section class="table-card filter-table-demo">
@@ -143,6 +155,8 @@ export default function App() {
 					getCell={deviceCell}
 					filterValues={filterValues}
 					onFilterValuesChange={setFilterValues}
+					savedFilters={savedFilters}
+					onSavedFiltersChange={saveFilters}
 					defaultSort={{ key: 'name', direction: 'asc' }}
 					showColumnCustomizer
 					emptyContent={<p class="table-message">No devices match the filters.</p>}

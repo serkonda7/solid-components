@@ -1,4 +1,4 @@
-import { IconSearch, IconX } from '@tabler/icons-solidjs'
+import { IconDeviceFloppy, IconSearch, IconX } from '@tabler/icons-solidjs'
 import type { Accessor, JSX } from 'solid-js'
 import {
 	createEffect,
@@ -24,6 +24,12 @@ export type FilterTableValue = string | string[]
  */
 export type FilterTableValues = Record<string, FilterTableValue>
 
+/** A named set of filter values the user saved for reuse. */
+export interface FilterTableSavedFilter {
+	name: string
+	values: FilterTableValues
+}
+
 export interface FilterTableFilter<TRow> {
 	key: string
 	label: string
@@ -45,6 +51,13 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	filterValues?: FilterTableValues | Accessor<FilterTableValues>
 	defaultFilterValues?: FilterTableValues
 	onFilterValuesChange?: (values: FilterTableValues) => void
+	/**
+	 * Saved filters, listed in a picker beside the quick search. Passing this
+	 * (even `[]`) enables saving: a "Save" pill names the applied filters and
+	 * emits the new list through `onSavedFiltersChange`; persisting it is up to you.
+	 */
+	savedFilters?: FilterTableSavedFilter[] | Accessor<FilterTableSavedFilter[]>
+	onSavedFiltersChange?: (savedFilters: FilterTableSavedFilter[]) => void
 	/** Pass `rows` through unfiltered, e.g. when the server applies `filterValues`. */
 	manualFiltering?: boolean
 	/** Shows the quick search input above the table. Defaults to `true`. */
@@ -60,6 +73,11 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	anyLabel?: string
 	yesLabel?: string
 	noLabel?: string
+	savedFiltersLabel?: string
+	saveLabel?: string
+	saveNameLabel?: string
+	cancelLabel?: string
+	deleteSavedFilterLabel?: string
 }
 
 const QUICK_SEARCH_KEY = 'q'
@@ -81,6 +99,20 @@ function normalize(values: FilterTableValues): FilterTableValues {
 	return next
 }
 
+function sameValues(a: FilterTableValues, b: FilterTableValues): boolean {
+	const keys = Object.keys(a)
+	return (
+		keys.length === Object.keys(b).length &&
+		keys.every((key) => {
+			const x = a[key]
+			const y = b[key]
+			return Array.isArray(x) && Array.isArray(y)
+				? x.length === y.length && x.every((v) => y.includes(v))
+				: x === y
+		})
+	)
+}
+
 function asText(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 		? String(value)
@@ -99,6 +131,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'filterValues',
 		'defaultFilterValues',
 		'onFilterValuesChange',
+		'savedFilters',
+		'onSavedFiltersChange',
 		'manualFiltering',
 		'quickSearch',
 		'getSearchText',
@@ -111,6 +145,11 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'anyLabel',
 		'yesLabel',
 		'noLabel',
+		'savedFiltersLabel',
+		'saveLabel',
+		'saveNameLabel',
+		'cancelLabel',
+		'deleteSavedFilterLabel',
 		'class',
 	])
 	const rows = createMemo(() => read(local.rows))
@@ -213,6 +252,40 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 
 	function clearFilters(): void {
 		setValues({ [QUICK_SEARCH_KEY]: quickSearch() })
+	}
+
+	const savedFilters = createMemo(() =>
+		local.savedFilters !== undefined ? read(local.savedFilters) : undefined,
+	)
+	/** The saved filter equal to the applied values, shown as the picker's selection. */
+	const currentSaved = createMemo(() =>
+		savedFilters()?.find((saved) => sameValues(normalize(saved.values), values())),
+	)
+	const [naming, setNaming] = createSignal(false)
+	const [savedName, setSavedName] = createSignal('')
+
+	function applySaved(name: string): void {
+		const saved = savedFilters()?.find((s) => s.name === name)
+		if (saved) setValues(saved.values)
+	}
+
+	function startSaving(): void {
+		setSavedName(currentSaved()?.name ?? '')
+		setNaming(true)
+	}
+
+	/** Saves the applied values, replacing a saved filter of the same name. */
+	function save(event: SubmitEvent): void {
+		event.preventDefault()
+		const name = savedName().trim()
+		if (name === '') return
+		const others = (savedFilters() ?? []).filter((s) => s.name !== name)
+		local.onSavedFiltersChange?.([...others, { name, values: values() }])
+		setNaming(false)
+	}
+
+	function deleteSaved(name: string): void {
+		local.onSavedFiltersChange?.((savedFilters() ?? []).filter((s) => s.name !== name))
 	}
 
 	// The form edits a draft that is applied on submit.
@@ -355,6 +428,32 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					/>
 				</div>
 			</Show>
+			<Show when={(savedFilters()?.length ?? 0) > 0}>
+				<div class="filter-table-saved">
+					<Combobox
+						value={currentSaved()?.name ?? ''}
+						onChange={applySaved}
+						options={(savedFilters() ?? []).map((s) => ({
+							value: s.name,
+							label: s.name,
+						}))}
+						ariaLabel={local.savedFiltersLabel ?? 'Saved filters'}
+						placeholder={local.savedFiltersLabel ?? 'Saved filters'}
+					/>
+					<Show when={currentSaved()}>
+						{(saved) => (
+							<button
+								type="button"
+								class="filter-table-chip-remove"
+								aria-label={`${local.deleteSavedFilterLabel ?? 'Delete saved filter'} ${saved().name}`}
+								onClick={() => deleteSaved(saved().name)}
+							>
+								<IconX size={14} aria-hidden="true" />
+							</button>
+						)}
+					</Show>
+				</div>
+			</Show>
 			<Show when={pills().length > 0}>
 				<ul class="filter-table-pills" aria-label="Applied filters">
 					<For each={pills()}>
@@ -381,7 +480,49 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 							{local.clearAllLabel ?? 'Clear all'}
 						</button>
 					</li>
+					<Show when={savedFilters() !== undefined && !naming()}>
+						<li>
+							<button
+								type="button"
+								class="filter-table-pill filter-table-pill-save"
+								onClick={startSaving}
+							>
+								<IconDeviceFloppy size={12} aria-hidden="true" />
+								{local.saveLabel ?? 'Save'}
+							</button>
+						</li>
+					</Show>
 				</ul>
+			</Show>
+			<Show when={naming() && pills().length > 0}>
+				<form
+					class="filter-table-save"
+					onSubmit={save}
+					onKeyDown={(e) => {
+						if (e.key === 'Escape') setNaming(false)
+					}}
+				>
+					<input
+						ref={(el) => queueMicrotask(() => el.focus())}
+						type="text"
+						class="filter-table-input"
+						aria-label={local.saveNameLabel ?? 'Filter name'}
+						placeholder={local.saveNameLabel ?? 'Filter name'}
+						value={savedName()}
+						onInput={(e) => setSavedName(e.currentTarget.value)}
+					/>
+					<button type="submit" class="filter-table-button filter-table-button-primary">
+						<IconDeviceFloppy size={16} aria-hidden="true" />
+						{local.saveLabel ?? 'Save'}
+					</button>
+					<button
+						type="button"
+						class="filter-table-button"
+						onClick={() => setNaming(false)}
+					>
+						{local.cancelLabel ?? 'Cancel'}
+					</button>
+				</form>
 			</Show>
 		</div>
 	)

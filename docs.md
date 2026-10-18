@@ -92,8 +92,17 @@ const filters: FilterTableFilter<Device>[] = [
   by default (`defaultFilterValues`); controlled with `filterValues` +
   `onFilterValuesChange`. `onFilterValuesChange` also fires when uncontrolled.
 - `manualFiltering` passes `rows` through unchanged, for server-side filtering.
+- Saved filters (modelled on NetBox): pass `savedFilters` (`{ name, values }[]`,
+  even `[]`) with `onSavedFiltersChange`. A "Save" pill after "Clear all" opens
+  an inline name input; saving stores the applied values (quick search included)
+  and replaces an entry of the same name. A "Saved filters" picker beside the
+  quick search applies one (replacing the applied values) and shows the saved
+  filter equal to the applied values, with a delete button. Persisting the list
+  (localStorage, backend) is up to the consumer.
 - Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`
-  (`Search`), `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`.
+  (`Search`), `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
+  `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
+  `deleteSavedFilterLabel`.
 
 ## Combobox usage
 
