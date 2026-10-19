@@ -103,12 +103,13 @@ const filters: FilterTableFilter<Device>[] = [
   an inline name input; saving stores the applied values (quick search included)
   and replaces an entry of the same name. A "Saved filters" picker beside the
   quick search applies one (replacing the applied values) and shows the saved
-  filter equal to the applied values, with a delete button. Persisting the list
-  (localStorage, backend) is up to the consumer.
+  filter equal to the applied values, with a clear button that, like "Clear all",
+  clears the filters but keeps the quick search and the saved filter. Persisting
+  the list (localStorage, backend) and deleting entries are up to the consumer.
 - Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`
   (`Search`), `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
   `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
-  `deleteSavedFilterLabel`.
+  `clearSavedFilterLabel`.
 
 ## Combobox usage
 

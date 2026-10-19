@@ -129,7 +129,7 @@ test('filter form applies on submit and pills remove filters', () => {
 	expect(container.querySelector('.filter-table-pills')).toBeNull()
 })
 
-test('saved filters are applied, saved, and deleted', async () => {
+test('saved filters are applied, saved, and cleared', async () => {
 	const onSavedChange = vi.fn()
 	const container = document.createElement('div')
 	document.body.append(container)
@@ -177,14 +177,15 @@ test('saved filters are applied, saved, and deleted', async () => {
 	expect(container.querySelector('.filter-table-save')).toBeNull()
 	expect(picker.value).toBe('Spotlights')
 
+	onSavedChange.mockClear()
 	container
-		.querySelector<HTMLButtonElement>('button[aria-label="Delete saved filter Spotlights"]')
+		.querySelector<HTMLButtonElement>('button[aria-label="Clear saved filter Spotlights"]')
 		?.click()
-	expect(onSavedChange).toHaveBeenLastCalledWith([
-		{ name: 'Lighting', values: { category: ['Lighting'] } },
-	])
-	// Deleting keeps the applied filters.
+	// Clearing resets the applied filters but keeps the quick search and the saved filter.
+	expect(onSavedChange).not.toHaveBeenCalled()
 	expect(names(container)).toEqual(['Spotlight'])
+	expect(search.value).toBe('spot')
+	expect(picker.value).toBe('')
 })
 
 test('saving is disabled without savedFilters', () => {

@@ -77,7 +77,7 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	saveLabel?: string
 	saveNameLabel?: string
 	cancelLabel?: string
-	deleteSavedFilterLabel?: string
+	clearSavedFilterLabel?: string
 }
 
 const QUICK_SEARCH_KEY = 'q'
@@ -149,7 +149,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'saveLabel',
 		'saveNameLabel',
 		'cancelLabel',
-		'deleteSavedFilterLabel',
+		'clearSavedFilterLabel',
 		'class',
 	])
 	const rows = createMemo(() => read(local.rows))
@@ -282,10 +282,6 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		const others = (savedFilters() ?? []).filter((s) => s.name !== name)
 		local.onSavedFiltersChange?.([...others, { name, values: values() }])
 		setNaming(false)
-	}
-
-	function deleteSaved(name: string): void {
-		local.onSavedFiltersChange?.((savedFilters() ?? []).filter((s) => s.name !== name))
 	}
 
 	// The form edits a draft that is applied on submit.
@@ -445,8 +441,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 							<button
 								type="button"
 								class="filter-table-chip-remove"
-								aria-label={`${local.deleteSavedFilterLabel ?? 'Delete saved filter'} ${saved().name}`}
-								onClick={() => deleteSaved(saved().name)}
+								aria-label={`${local.clearSavedFilterLabel ?? 'Clear saved filter'} ${saved().name}`}
+								onClick={clearFilters}
 							>
 								<IconX size={14} aria-hidden="true" />
 							</button>
