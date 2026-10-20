@@ -57,8 +57,7 @@ const columns = [
   missing from the order are appended in `columns` order; unknown keys are ignored.
 - `Show all` restores all columns; `Reset` restores the default visibility and order.
 - Labels can be customized via `columnCustomizerLabel`, `columnCustomizerTitle`,
-  `columnCustomizerShowAllLabel`, `columnCustomizerResetLabel`,
-  `columnCustomizerMoveUpLabel`, and `columnCustomizerMoveDownLabel`.
+  `columnCustomizerShowAllLabel`, and `columnCustomizerResetLabel`.
 - `FilterTable` passes all of these through to its `DataTable`.
 
 Full interactive coverage (sort, selection, custom cells, actions, loading, empty):

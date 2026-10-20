@@ -104,28 +104,6 @@
 	cursor: pointer;
 }
 
-.data-table-customizer-move {
-	display: inline-flex;
-	padding: 0.125rem;
-	border: 0;
-	border-radius: 0.25rem;
-	background: none;
-	color: inherit;
-	cursor: pointer;
-}
-
-.data-table-customizer-move:hover:not(:disabled) {
-	background: var(
-		--data-table-customizer-hover-bg,
-		var(--surface-hover, light-dark(#f5f5f5, #292d33))
-	);
-}
-
-.data-table-customizer-move:disabled {
-	opacity: 0.3;
-	cursor: default;
-}
-
 .data-table-customizer-option:has(input:disabled) {
 	opacity: 0.6;
 	cursor: not-allowed;

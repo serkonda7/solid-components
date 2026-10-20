@@ -1,4 +1,4 @@
-import { IconChevronDown, IconChevronUp, IconMenu } from '@tabler/icons-solidjs'
+import { IconMenu } from '@tabler/icons-solidjs'
 import type { Accessor, JSX } from 'solid-js'
 import {
 	children,
@@ -59,8 +59,6 @@ export interface DataTableProps<TRow> {
 	columnCustomizerTitle?: string
 	columnCustomizerShowAllLabel?: string
 	columnCustomizerResetLabel?: string
-	columnCustomizerMoveUpLabel?: string
-	columnCustomizerMoveDownLabel?: string
 	/** Content rendered at the start of the toolbar, before the column customizer. */
 	toolbar?: JSX.Element
 	loading?: boolean | Accessor<boolean>
@@ -227,19 +225,6 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		setColumnOrder(keys)
 	}
 
-	/** Moves a column one step from its move button, keeping focus on the moved item. */
-	function moveColumnBy(button: HTMLButtonElement, key: string, delta: number): void {
-		const index = orderedColumns().findIndex((column) => column.key === key)
-		moveColumn(key, index + delta)
-		// Reordering may detach the focused button; if it is now disabled at the
-		// edge, hand focus to its sibling.
-		const buttons = button.parentElement?.querySelectorAll<HTMLButtonElement>(
-			'.data-table-customizer-move',
-		)
-		const target = button.disabled ? [...(buttons ?? [])].find((b) => !b.disabled) : button
-		target?.focus()
-	}
-
 	function resetColumns(): void {
 		setVisibleKeys(defaultVisibleKeys())
 		setColumnOrder(columnsInOrder(props.defaultColumnOrder ?? []).map((column) => column.key))
@@ -378,44 +363,6 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 														/>
 														{column.ariaLabel ?? column.label}
 													</label>
-													<button
-														type="button"
-														class="data-table-customizer-move"
-														aria-label={`${props.columnCustomizerMoveUpLabel ?? 'Move up'}: ${column.ariaLabel ?? column.label}`}
-														disabled={index() === 0}
-														onClick={(e) =>
-															moveColumnBy(
-																e.currentTarget,
-																column.key,
-																-1,
-															)
-														}
-													>
-														<IconChevronUp
-															size={14}
-															aria-hidden="true"
-														/>
-													</button>
-													<button
-														type="button"
-														class="data-table-customizer-move"
-														aria-label={`${props.columnCustomizerMoveDownLabel ?? 'Move down'}: ${column.ariaLabel ?? column.label}`}
-														disabled={
-															index() === orderedColumns().length - 1
-														}
-														onClick={(e) =>
-															moveColumnBy(
-																e.currentTarget,
-																column.key,
-																1,
-															)
-														}
-													>
-														<IconChevronDown
-															size={14}
-															aria-hidden="true"
-														/>
-													</button>
 												</li>
 											)}
 										</For>

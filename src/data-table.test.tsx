@@ -86,10 +86,11 @@ function headers(container: HTMLElement): string[] {
 	return [...container.querySelectorAll('thead th')].map((th) => th.textContent ?? '')
 }
 
-function moveButton(container: HTMLElement, label: string): HTMLButtonElement {
-	const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
-	if (!button) throw new Error(`No button ${label}`)
-	return button
+function dragOnto(container: HTMLElement, from: number, to: number): void {
+	const items = container.querySelectorAll<HTMLElement>('.data-table-customizer-item')
+	items[from]?.dispatchEvent(new Event('dragstart', { bubbles: true }))
+	items[to]?.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true }))
+	items[from]?.dispatchEvent(new Event('dragend', { bubbles: true }))
 }
 
 function mountCustomizer(extra: Partial<DataTableProps<Row>> = {}): HTMLElement {
@@ -115,14 +116,12 @@ test('customizer moves columns and reset restores the order', () => {
 	const changes: string[][] = []
 	const container = mountCustomizer({ onColumnOrderChange: (keys) => changes.push(keys) })
 
-	moveButton(container, 'Move down: Name').click()
+	dragOnto(container, 0, 1)
 	expect(headers(container)).toEqual(['Price', 'Name', 'ID'])
 	expect(columnText(container, 1)).toEqual(['B', 'A', 'C'])
-	expect(document.activeElement?.getAttribute('aria-label')).toBe('Move down: Name')
 
-	moveButton(container, 'Move up: ID').click()
+	dragOnto(container, 2, 1)
 	expect(headers(container)).toEqual(['Price', 'ID', 'Name'])
-	expect(moveButton(container, 'Move up: Price').disabled).toBe(true)
 	expect(changes).toEqual([
 		['price', 'name', 'id'],
 		['price', 'id', 'name'],
@@ -142,7 +141,7 @@ test('column order can be controlled', () => {
 	})
 	expect(headers(container)).toEqual(['ID', 'Name', 'Price'])
 
-	moveButton(container, 'Move down: ID').click()
+	dragOnto(container, 0, 1)
 	expect(changes).toEqual([['name', 'id', 'price']])
 	expect(headers(container)).toEqual(['ID', 'Name', 'Price'])
 })
