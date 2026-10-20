@@ -363,6 +363,160 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		return props.getCell?.(row, column) ?? column.getValue?.(row) ?? null
 	}
 
+	function ariaSort(column: DataTableColumn<TRow>): JSX.AriaAttributes['aria-sort'] {
+		if (!column.sortable) return undefined
+		if (sortKey() !== column.key) return 'none'
+		return sortDirection() === 'asc' ? 'ascending' : 'descending'
+	}
+
+	function sortIndicator(column: DataTableColumn<TRow>): string {
+		if (sortKey() !== column.key) return ''
+		return sortDirection() === 'asc' ? '▲' : '▼'
+	}
+
+	const isSortable = (column: DataTableColumn<TRow>): boolean =>
+		Boolean(column.sortable) && (!sortControlled || Boolean(props.onSort || props.onSortChange))
+
+	function onDragStart(e: DragEvent, column: DataTableColumn<TRow>): void {
+		setDraggedKey(column.key)
+		e.dataTransfer?.setData('text/plain', column.key)
+		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+	}
+
+	function onDragOver(e: DragEvent, index: number): void {
+		const key = draggedKey()
+		if (key === undefined) return
+		e.preventDefault()
+		moveColumn(key, index)
+	}
+
+	function customizerItem(column: DataTableColumn<TRow>, index: () => number): JSX.Element {
+		return (
+			<li
+				class="data-table-customizer-item"
+				classList={{ 'data-table-customizer-item-dragging': draggedKey() === column.key }}
+				draggable="true"
+				onDragStart={(e) => onDragStart(e, column)}
+				onDragOver={(e) => onDragOver(e, index())}
+				onDrop={(e) => e.preventDefault()}
+				onDragEnd={() => setDraggedKey(undefined)}
+			>
+				<IconMenu class="data-table-customizer-grip" size={14} aria-hidden="true" />
+				<label class="data-table-customizer-option">
+					<input
+						type="checkbox"
+						checked={isColumnVisible(column)}
+						disabled={column.toggleable === false}
+						onChange={(e) => toggleColumn(column.key, e.currentTarget.checked)}
+					/>
+					{column.ariaLabel ?? column.label}
+				</label>
+			</li>
+		)
+	}
+
+	function customizerPanel(): JSX.Element {
+		return (
+			<div
+				id={panelId}
+				role="dialog"
+				aria-label={props.columnCustomizerTitle ?? 'Customize columns'}
+				class="data-table-customizer-panel"
+			>
+				<p class="data-table-customizer-title">
+					{props.columnCustomizerTitle ?? 'Shown columns'}
+				</p>
+				<ul class="data-table-customizer-list">
+					<For each={orderedColumns()}>
+						{(column, index) => customizerItem(column, index)}
+					</For>
+				</ul>
+				<div class="data-table-customizer-actions">
+					<button type="button" onClick={showAllColumns}>
+						{props.columnCustomizerShowAllLabel ?? 'Show all'}
+					</button>
+					<button type="button" onClick={resetColumns}>
+						{props.columnCustomizerResetLabel ?? 'Reset'}
+					</button>
+				</div>
+			</div>
+		)
+	}
+
+	function customizer(): JSX.Element {
+		return (
+			<div ref={customizerRoot} class="data-table-customizer">
+				<button
+					type="button"
+					class="data-table-customizer-button"
+					aria-haspopup="dialog"
+					aria-expanded={customizerOpen()}
+					aria-controls={panelId}
+					onClick={() => setCustomizerOpen((open) => !open)}
+				>
+					<span aria-hidden="true">⚙</span> {props.columnCustomizerLabel ?? 'Columns'}
+				</button>
+				<Show when={customizerOpen()}>{customizerPanel()}</Show>
+			</div>
+		)
+	}
+
+	function headerCell(column: DataTableColumn<TRow>): JSX.Element {
+		return (
+			<th
+				class={column.class}
+				data-column-key={column.key}
+				style={columnStyle(column, widths()[column.key])}
+				aria-sort={ariaSort(column)}
+			>
+				<Show when={isSortable(column)} fallback={column.label}>
+					<button
+						type="button"
+						class="data-table-sort"
+						onClick={() => changeSort(column.key)}
+					>
+						{column.label}
+						<span class="data-table-sort-indicator" aria-hidden="true">
+							{sortIndicator(column)}
+						</span>
+					</button>
+				</Show>
+				<Show when={props.resizableColumns}>
+					{/* biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA window-splitter pattern; <hr> can't take focus or key handlers */}
+					<span
+						class="data-table-resize-handle"
+						role="separator"
+						aria-orientation="vertical"
+						aria-label={`Resize ${column.ariaLabel ?? column.label}`}
+						tabindex="0"
+						onPointerDown={(e) => startResize(e, column.key)}
+						onKeyDown={(e) => resizeByKey(e, column.key)}
+					/>
+				</Show>
+			</th>
+		)
+	}
+
+	function bodyRow(row: TRow): JSX.Element {
+		return (
+			<tr>
+				<For each={visibleColumns()}>
+					{(column) => (
+						<td class={column.class} style={columnStyle(column, widths()[column.key])}>
+							{cell(row, column)}
+						</td>
+					)}
+				</For>
+				<Show when={props.rowActions}>
+					<td>{props.rowActions?.(row)}</td>
+				</Show>
+			</tr>
+		)
+	}
+
+	const showEmpty = (): boolean =>
+		!loading() && (props.empty === undefined ? rows().length === 0 : read(props.empty))
+
 	return (
 		<div class={`data-table-wrap${props.class ? ` ${props.class}` : ''}`}>
 			<Show when={showCustomizer() || toolbar.toArray().length > 0}>
@@ -370,93 +524,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					<Show when={toolbar.toArray().length > 0}>
 						<div class="data-table-toolbar-start">{toolbar()}</div>
 					</Show>
-					<Show when={showCustomizer()}>
-						<div ref={customizerRoot} class="data-table-customizer">
-							<button
-								type="button"
-								class="data-table-customizer-button"
-								aria-haspopup="dialog"
-								aria-expanded={customizerOpen()}
-								aria-controls={panelId}
-								onClick={() => setCustomizerOpen((open) => !open)}
-							>
-								<span aria-hidden="true">⚙</span>{' '}
-								{props.columnCustomizerLabel ?? 'Columns'}
-							</button>
-							<Show when={customizerOpen()}>
-								<div
-									id={panelId}
-									role="dialog"
-									aria-label={props.columnCustomizerTitle ?? 'Customize columns'}
-									class="data-table-customizer-panel"
-								>
-									<p class="data-table-customizer-title">
-										{props.columnCustomizerTitle ?? 'Shown columns'}
-									</p>
-									<ul class="data-table-customizer-list">
-										<For each={orderedColumns()}>
-											{(column, index) => (
-												<li
-													class="data-table-customizer-item"
-													classList={{
-														'data-table-customizer-item-dragging':
-															draggedKey() === column.key,
-													}}
-													draggable="true"
-													onDragStart={(e) => {
-														setDraggedKey(column.key)
-														e.dataTransfer?.setData(
-															'text/plain',
-															column.key,
-														)
-														if (e.dataTransfer) {
-															e.dataTransfer.effectAllowed = 'move'
-														}
-													}}
-													onDragOver={(e) => {
-														const key = draggedKey()
-														if (key === undefined) return
-														e.preventDefault()
-														moveColumn(key, index())
-													}}
-													onDrop={(e) => e.preventDefault()}
-													onDragEnd={() => setDraggedKey(undefined)}
-												>
-													<IconMenu
-														class="data-table-customizer-grip"
-														size={14}
-														aria-hidden="true"
-													/>
-													<label class="data-table-customizer-option">
-														<input
-															type="checkbox"
-															checked={isColumnVisible(column)}
-															disabled={column.toggleable === false}
-															onChange={(e) =>
-																toggleColumn(
-																	column.key,
-																	e.currentTarget.checked,
-																)
-															}
-														/>
-														{column.ariaLabel ?? column.label}
-													</label>
-												</li>
-											)}
-										</For>
-									</ul>
-									<div class="data-table-customizer-actions">
-										<button type="button" onClick={showAllColumns}>
-											{props.columnCustomizerShowAllLabel ?? 'Show all'}
-										</button>
-										<button type="button" onClick={resetColumns}>
-											{props.columnCustomizerResetLabel ?? 'Reset'}
-										</button>
-									</div>
-								</div>
-							</Show>
-						</div>
-					</Show>
+					<Show when={showCustomizer()}>{customizer()}</Show>
 				</div>
 			</Show>
 			<div class="data-table-scroll">
@@ -468,100 +536,21 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				>
 					<thead>
 						<tr>
-							<For each={visibleColumns()}>
-								{(column) => (
-									<th
-										class={column.class}
-										data-column-key={column.key}
-										style={columnStyle(column, widths()[column.key])}
-										aria-sort={
-											column.sortable
-												? sortKey() === column.key
-													? sortDirection() === 'asc'
-														? 'ascending'
-														: 'descending'
-													: 'none'
-												: undefined
-										}
-									>
-										<Show
-											when={
-												column.sortable &&
-												(!sortControlled ||
-													props.onSort ||
-													props.onSortChange)
-											}
-											fallback={column.label}
-										>
-											<button
-												type="button"
-												class="data-table-sort"
-												onClick={() => changeSort(column.key)}
-											>
-												{column.label}
-												<span
-													class="data-table-sort-indicator"
-													aria-hidden="true"
-												>
-													{sortKey() === column.key
-														? sortDirection() === 'asc'
-															? '▲'
-															: '▼'
-														: ''}
-												</span>
-											</button>
-										</Show>
-										<Show when={props.resizableColumns}>
-											<span
-												class="data-table-resize-handle"
-												role="separator"
-												aria-orientation="vertical"
-												aria-label={`Resize ${column.ariaLabel ?? column.label}`}
-												tabindex="0"
-												onPointerDown={(e) => startResize(e, column.key)}
-												onKeyDown={(e) => resizeByKey(e, column.key)}
-											/>
-										</Show>
-									</th>
-								)}
-							</For>
+							<For each={visibleColumns()}>{headerCell}</For>
 							<Show when={props.rowActions}>
 								<th>Actions</th>
 							</Show>
 						</tr>
 					</thead>
 					<tbody>
-						<For each={sortedRows()}>
-							{(row) => (
-								<tr>
-									<For each={visibleColumns()}>
-										{(column) => (
-											<td
-												class={column.class}
-												style={columnStyle(column, widths()[column.key])}
-											>
-												{cell(row, column)}
-											</td>
-										)}
-									</For>
-									<Show when={props.rowActions}>
-										<td>{props.rowActions?.(row)}</td>
-									</Show>
-								</tr>
-							)}
-						</For>
+						<For each={sortedRows()}>{bodyRow}</For>
 					</tbody>
 				</table>
 			</div>
 			<Show when={loading()}>
 				{props.loadingContent ?? <p class="data-table-status">Loading…</p>}
 			</Show>
-			<Show
-				when={
-					!loading() &&
-					(props.empty === undefined ? rows().length === 0 : read(props.empty))
-				}
-			>
+			<Show when={showEmpty()}>
 				{props.emptyContent ?? <p class="data-table-status">No results.</p>}
 			</Show>
 		</div>

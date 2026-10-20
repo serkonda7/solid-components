@@ -164,6 +164,90 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 			? (selected()?.label ?? props.emptyLabel ?? props.searchLabel ?? 'Search')
 			: (props.emptyLabel ?? props.placeholder)
 
+	function optionRow(option: ComboboxOption, index: () => number): JSX.Element {
+		return (
+			// biome-ignore lint/a11y/useKeyWithClickEvents: keyboard selection runs through the combobox input (aria-activedescendant)
+			// biome-ignore lint/a11y/useFocusableInteractive: focus stays in the combobox input
+			<div
+				id={optionId(index())}
+				data-index={index()}
+				role="option"
+				aria-selected={String(option.value) === props.value}
+				classList={{
+					'combobox-option': true,
+					'combobox-option-active': index() === active(),
+					'combobox-option-empty': option.value === '',
+				}}
+				// Keep focus in the input so blur doesn't close the list first.
+				onMouseDown={(e) => e.preventDefault()}
+				onMouseMove={() => setActive(index())}
+				onClick={() => pick(index())}
+			>
+				<span class="combobox-option-label">
+					<Show when={option.icon}>
+						{(icon) => (
+							<span class="combobox-option-icon" aria-hidden="true">
+								<Dynamic component={icon()} size={14} />
+							</span>
+						)}
+					</Show>
+					{option.label}
+				</span>
+				<Show when={option.detail}>
+					<span class="combobox-detail">{option.detail}</span>
+				</Show>
+			</div>
+		)
+	}
+
+	function addRow(): JSX.Element {
+		return (
+			// biome-ignore lint/a11y/useKeyWithClickEvents: keyboard selection runs through the combobox input (aria-activedescendant)
+			// biome-ignore lint/a11y/useFocusableInteractive: focus stays in the combobox input
+			<div
+				id={optionId(addIndex())}
+				data-index={addIndex()}
+				role="option"
+				aria-selected={false}
+				classList={{
+					'combobox-option': true,
+					'combobox-option-add': true,
+					'combobox-option-active': addIndex() === active(),
+				}}
+				onMouseDown={(e) => e.preventDefault()}
+				onMouseMove={() => setActive(addIndex())}
+				onClick={() => pick(addIndex())}
+			>
+				<IconPlus size={14} aria-hidden="true" />
+				{props.addLabel ?? 'Add'}
+			</div>
+		)
+	}
+
+	function listbox(): JSX.Element {
+		return (
+			<div
+				class="combobox-list"
+				classList={{ 'combobox-list-detail': hasDetail() }}
+				id={listId()}
+				ref={list}
+				role="listbox"
+			>
+				<For
+					each={filtered()}
+					fallback={
+						<div class="combobox-empty">
+							{props.noMatchesLabel ?? 'No matching objects'}
+						</div>
+					}
+				>
+					{optionRow}
+				</For>
+				<Show when={props.onAdd}>{addRow()}</Show>
+			</div>
+		)
+	}
+
 	return (
 		<div
 			class={props.class ? `combobox ${props.class}` : 'combobox'}
@@ -216,79 +300,7 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 				</span>
 			</Show>
 			<IconChevronDown class="combobox-chevron" size={16} aria-hidden="true" />
-			<Show when={open()}>
-				<div
-					class="combobox-list"
-					classList={{ 'combobox-list-detail': hasDetail() }}
-					id={listId()}
-					ref={list}
-					role="listbox"
-				>
-					<For
-						each={filtered()}
-						fallback={
-							<div class="combobox-empty">
-								{props.noMatchesLabel ?? 'No matching objects'}
-							</div>
-						}
-					>
-						{(option, index) => (
-							// biome-ignore lint/a11y/useKeyWithClickEvents: keyboard selection runs through the combobox input (aria-activedescendant)
-							// biome-ignore lint/a11y/useFocusableInteractive: focus stays in the combobox input
-							<div
-								id={optionId(index())}
-								data-index={index()}
-								role="option"
-								aria-selected={String(option.value) === props.value}
-								classList={{
-									'combobox-option': true,
-									'combobox-option-active': index() === active(),
-									'combobox-option-empty': option.value === '',
-								}}
-								// Keep focus in the input so blur doesn't close the list first.
-								onMouseDown={(e) => e.preventDefault()}
-								onMouseMove={() => setActive(index())}
-								onClick={() => pick(index())}
-							>
-								<span class="combobox-option-label">
-									<Show when={option.icon}>
-										{(icon) => (
-											<span class="combobox-option-icon" aria-hidden="true">
-												<Dynamic component={icon()} size={14} />
-											</span>
-										)}
-									</Show>
-									{option.label}
-								</span>
-								<Show when={option.detail}>
-									<span class="combobox-detail">{option.detail}</span>
-								</Show>
-							</div>
-						)}
-					</For>
-					<Show when={props.onAdd}>
-						{/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard selection runs through the combobox input (aria-activedescendant) */}
-						{/* biome-ignore lint/a11y/useFocusableInteractive: focus stays in the combobox input */}
-						<div
-							id={optionId(addIndex())}
-							data-index={addIndex()}
-							role="option"
-							aria-selected={false}
-							classList={{
-								'combobox-option': true,
-								'combobox-option-add': true,
-								'combobox-option-active': addIndex() === active(),
-							}}
-							onMouseDown={(e) => e.preventDefault()}
-							onMouseMove={() => setActive(addIndex())}
-							onClick={() => pick(addIndex())}
-						>
-							<IconPlus size={14} aria-hidden="true" />
-							{props.addLabel ?? 'Add'}
-						</div>
-					</Show>
-				</div>
-			</Show>
+			<Show when={open()}>{listbox()}</Show>
 		</div>
 	)
 }

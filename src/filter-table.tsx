@@ -339,6 +339,49 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		setTab('results')
 	}
 
+	function multiField(filter: FilterTableFilter<TRow>): JSX.Element {
+		const selected = () => {
+			const value = draftValue(filter.key)
+			return Array.isArray(value) ? value : []
+		}
+		const chip = (value: string): JSX.Element => (
+			<li class="filter-table-chip">
+				{optionLabel(filter, value)}
+				<button
+					type="button"
+					class="filter-table-chip-remove"
+					aria-label={`Remove ${optionLabel(filter, value)}`}
+					onClick={() =>
+						setDraftValue(
+							filter.key,
+							selected().filter((v) => v !== value),
+						)
+					}
+				>
+					<IconX size={12} aria-hidden="true" />
+				</button>
+			</li>
+		)
+		return (
+			<div class="filter-table-multi">
+				<Combobox
+					id={fieldId(filter.key)}
+					value=""
+					onChange={(value) => setDraftValue(filter.key, [...selected(), value])}
+					options={options(filter).filter(
+						(option) => !selected().includes(String(option.value)),
+					)}
+					placeholder={filter.placeholder ?? local.anyLabel ?? 'Any'}
+				/>
+				<Show when={selected().length > 0}>
+					<ul class="filter-table-chips">
+						<For each={selected()}>{chip}</For>
+					</ul>
+				</Show>
+			</div>
+		)
+	}
+
 	function field(filter: FilterTableFilter<TRow>): JSX.Element {
 		if (filter.type === 'text') {
 			return (
@@ -366,192 +409,209 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				/>
 			)
 		}
-		const selected = () => {
-			const value = draftValue(filter.key)
-			return Array.isArray(value) ? value : []
-		}
+		return multiField(filter)
+	}
+
+	function quickSearchBox(): JSX.Element {
 		return (
-			<div class="filter-table-multi">
-				<Combobox
-					id={fieldId(filter.key)}
-					value=""
-					onChange={(value) => setDraftValue(filter.key, [...selected(), value])}
-					options={options(filter).filter(
-						(option) => !selected().includes(String(option.value)),
-					)}
-					placeholder={filter.placeholder ?? local.anyLabel ?? 'Any'}
+			<div class="filter-table-search">
+				<IconSearch class="filter-table-search-icon" size={16} aria-hidden="true" />
+				<input
+					type="search"
+					class="filter-table-input"
+					aria-label={local.quickSearchLabel ?? 'Quick search'}
+					placeholder={local.quickSearchLabel ?? 'Quick search'}
+					value={quickSearch()}
+					onInput={(e) => setValue(QUICK_SEARCH_KEY, e.currentTarget.value)}
 				/>
-				<Show when={selected().length > 0}>
-					<ul class="filter-table-chips">
-						<For each={selected()}>
-							{(value) => (
-								<li class="filter-table-chip">
-									{optionLabel(filter, value)}
-									<button
-										type="button"
-										class="filter-table-chip-remove"
-										aria-label={`Remove ${optionLabel(filter, value)}`}
-										onClick={() =>
-											setDraftValue(
-												filter.key,
-												selected().filter((v) => v !== value),
-											)
-										}
-									>
-										<IconX size={12} aria-hidden="true" />
-									</button>
-								</li>
-							)}
-						</For>
-					</ul>
+			</div>
+		)
+	}
+
+	function savedPicker(): JSX.Element {
+		return (
+			<div class="filter-table-saved">
+				<Combobox
+					value={currentSaved()?.name ?? ''}
+					onChange={applySaved}
+					options={(savedFilters() ?? []).map((s) => ({ value: s.name, label: s.name }))}
+					ariaLabel={local.savedFiltersLabel ?? 'Saved filters'}
+					placeholder={local.savedFiltersLabel ?? 'Saved filters'}
+				/>
+				<Show when={currentSaved()}>
+					{(saved) => (
+						<button
+							type="button"
+							class="filter-table-chip-remove"
+							aria-label={`${local.clearSavedFilterLabel ?? 'Clear saved filter'} ${saved().name}`}
+							onClick={clearFilters}
+						>
+							<IconX size={14} aria-hidden="true" />
+						</button>
+					)}
 				</Show>
 			</div>
 		)
 	}
 
-	const toolbar = (
-		<div class="filter-table-toolbar">
-			<Show when={local.quickSearch !== false}>
-				<div class="filter-table-search">
-					<IconSearch class="filter-table-search-icon" size={16} aria-hidden="true" />
-					<input
-						type="search"
-						class="filter-table-input"
-						aria-label={local.quickSearchLabel ?? 'Quick search'}
-						placeholder={local.quickSearchLabel ?? 'Quick search'}
-						value={quickSearch()}
-						onInput={(e) => setValue(QUICK_SEARCH_KEY, e.currentTarget.value)}
-					/>
-				</div>
-			</Show>
-			<Show when={(savedFilters()?.length ?? 0) > 0}>
-				<div class="filter-table-saved">
-					<Combobox
-						value={currentSaved()?.name ?? ''}
-						onChange={applySaved}
-						options={(savedFilters() ?? []).map((s) => ({
-							value: s.name,
-							label: s.name,
-						}))}
-						ariaLabel={local.savedFiltersLabel ?? 'Saved filters'}
-						placeholder={local.savedFiltersLabel ?? 'Saved filters'}
-					/>
-					<Show when={currentSaved()}>
-						{(saved) => (
-							<button
-								type="button"
-								class="filter-table-chip-remove"
-								aria-label={`${local.clearSavedFilterLabel ?? 'Clear saved filter'} ${saved().name}`}
-								onClick={clearFilters}
-							>
-								<IconX size={14} aria-hidden="true" />
-							</button>
-						)}
-					</Show>
-				</div>
-			</Show>
-			<Show when={pills().length > 0}>
-				<ul class="filter-table-pills" aria-label="Applied filters">
-					<For each={pills()}>
-						{(pill) => (
-							<li>
-								<button
-									type="button"
-									class="filter-table-pill"
-									aria-label={`Remove filter ${pill.text}`}
-									onClick={() => removePill(pill.filter, pill.item)}
-								>
-									{pill.text}
-									<IconX size={12} aria-hidden="true" />
-								</button>
-							</li>
-						)}
-					</For>
+	function pill(item: { filter: FilterTableFilter<TRow>; item: string; text: string }) {
+		return (
+			<li>
+				<button
+					type="button"
+					class="filter-table-pill"
+					aria-label={`Remove filter ${item.text}`}
+					onClick={() => removePill(item.filter, item.item)}
+				>
+					{item.text}
+					<IconX size={12} aria-hidden="true" />
+				</button>
+			</li>
+		)
+	}
+
+	function pillList(): JSX.Element {
+		return (
+			<ul class="filter-table-pills" aria-label="Applied filters">
+				<For each={pills()}>{pill}</For>
+				<li>
+					<button
+						type="button"
+						class="filter-table-pill filter-table-pill-clear"
+						onClick={clearFilters}
+					>
+						{local.clearAllLabel ?? 'Clear all'}
+					</button>
+				</li>
+				<Show when={savedFilters() !== undefined && !naming()}>
 					<li>
 						<button
 							type="button"
-							class="filter-table-pill filter-table-pill-clear"
-							onClick={clearFilters}
+							class="filter-table-pill filter-table-pill-save"
+							onClick={startSaving}
 						>
-							{local.clearAllLabel ?? 'Clear all'}
+							<IconDeviceFloppy size={12} aria-hidden="true" />
+							{local.saveLabel ?? 'Save'}
 						</button>
 					</li>
-					<Show when={savedFilters() !== undefined && !naming()}>
-						<li>
-							<button
-								type="button"
-								class="filter-table-pill filter-table-pill-save"
-								onClick={startSaving}
-							>
-								<IconDeviceFloppy size={12} aria-hidden="true" />
-								{local.saveLabel ?? 'Save'}
-							</button>
-						</li>
-					</Show>
-				</ul>
-			</Show>
-			<Show when={naming() && pills().length > 0}>
-				<form
-					class="filter-table-save"
-					onSubmit={save}
-					onKeyDown={(e) => {
-						if (e.key === 'Escape') setNaming(false)
-					}}
-				>
-					<input
-						ref={(el) => queueMicrotask(() => el.focus())}
-						type="text"
-						class="filter-table-input"
-						aria-label={local.saveNameLabel ?? 'Filter name'}
-						placeholder={local.saveNameLabel ?? 'Filter name'}
-						value={savedName()}
-						onInput={(e) => setSavedName(e.currentTarget.value)}
-					/>
-					<button type="submit" class="filter-table-button filter-table-button-primary">
-						<IconDeviceFloppy size={16} aria-hidden="true" />
-						{local.saveLabel ?? 'Save'}
-					</button>
-					<button
-						type="button"
-						class="filter-table-button"
-						onClick={() => setNaming(false)}
-					>
-						{local.cancelLabel ?? 'Cancel'}
-					</button>
-				</form>
-			</Show>
+				</Show>
+			</ul>
+		)
+	}
+
+	function saveForm(): JSX.Element {
+		return (
+			<form
+				class="filter-table-save"
+				onSubmit={save}
+				onKeyDown={(e) => {
+					if (e.key === 'Escape') setNaming(false)
+				}}
+			>
+				<input
+					ref={(el) => queueMicrotask(() => el.focus())}
+					type="text"
+					class="filter-table-input"
+					aria-label={local.saveNameLabel ?? 'Filter name'}
+					placeholder={local.saveNameLabel ?? 'Filter name'}
+					value={savedName()}
+					onInput={(e) => setSavedName(e.currentTarget.value)}
+				/>
+				<button type="submit" class="filter-table-button filter-table-button-primary">
+					<IconDeviceFloppy size={16} aria-hidden="true" />
+					{local.saveLabel ?? 'Save'}
+				</button>
+				<button type="button" class="filter-table-button" onClick={() => setNaming(false)}>
+					{local.cancelLabel ?? 'Cancel'}
+				</button>
+			</form>
+		)
+	}
+
+	const toolbar = (
+		<div class="filter-table-toolbar">
+			<Show when={local.quickSearch !== false}>{quickSearchBox()}</Show>
+			<Show when={(savedFilters()?.length ?? 0) > 0}>{savedPicker()}</Show>
+			<Show when={pills().length > 0}>{pillList()}</Show>
+			<Show when={naming() && pills().length > 0}>{saveForm()}</Show>
 		</div>
 	)
+
+	function tabLabel(name: Tab): string {
+		return name === 'results'
+			? (local.resultsLabel ?? 'Results')
+			: (local.filtersLabel ?? 'Filters')
+	}
+
+	function tabCount(name: Tab): number {
+		return name === 'results' ? filteredRows().length : appliedFilters().length
+	}
+
+	function tabButton(name: Tab): JSX.Element {
+		return (
+			<button
+				type="button"
+				role="tab"
+				id={tabId(name)}
+				class="filter-table-tab"
+				aria-selected={tab() === name}
+				aria-controls={panelId(name)}
+				tabIndex={tab() === name ? 0 : -1}
+				onClick={() => selectTab(name)}
+				onKeyDown={onTabKeyDown}
+			>
+				{tabLabel(name)}
+				<Show when={name === 'results' || appliedFilters().length > 0}>
+					<span class="filter-table-badge">{tabCount(name)}</span>
+				</Show>
+			</button>
+		)
+	}
+
+	function fieldRow(filter: FilterTableFilter<TRow>): JSX.Element {
+		return (
+			<div class="filter-table-field">
+				<label class="filter-table-label" for={fieldId(filter.key)}>
+					{filter.label}
+				</label>
+				{field(filter)}
+			</div>
+		)
+	}
+
+	function fieldset(group: { name: string | undefined; filters: FilterTableFilter<TRow>[] }) {
+		return (
+			<fieldset class="filter-table-fieldset">
+				<Show when={group.name}>
+					<legend class="filter-table-legend">{group.name}</legend>
+				</Show>
+				<For each={group.filters}>{fieldRow}</For>
+			</fieldset>
+		)
+	}
+
+	function filterForm(): JSX.Element {
+		return (
+			<form class="filter-table-form" onSubmit={apply}>
+				<For each={groups()}>{fieldset}</For>
+				<div class="filter-table-form-actions">
+					<button type="button" class="filter-table-button" onClick={reset}>
+						<IconX size={16} aria-hidden="true" />
+						{local.resetLabel ?? 'Reset'}
+					</button>
+					<button type="submit" class="filter-table-button filter-table-button-primary">
+						<IconSearch size={16} aria-hidden="true" />
+						{local.applyLabel ?? 'Search'}
+					</button>
+				</div>
+			</form>
+		)
+	}
 
 	return (
 		<div class={`filter-table${local.class ? ` ${local.class}` : ''}`}>
 			<div class="filter-table-tabs" role="tablist">
-				<For each={tabs}>
-					{(name) => (
-						<button
-							type="button"
-							role="tab"
-							id={tabId(name)}
-							class="filter-table-tab"
-							aria-selected={tab() === name}
-							aria-controls={panelId(name)}
-							tabIndex={tab() === name ? 0 : -1}
-							onClick={() => selectTab(name)}
-							onKeyDown={onTabKeyDown}
-						>
-							{name === 'results'
-								? (local.resultsLabel ?? 'Results')
-								: (local.filtersLabel ?? 'Filters')}
-							<Show when={name === 'results' || appliedFilters().length > 0}>
-								<span class="filter-table-badge">
-									{name === 'results'
-										? filteredRows().length
-										: appliedFilters().length}
-								</span>
-							</Show>
-						</button>
-					)}
-				</For>
+				<For each={tabs}>{tabButton}</For>
 			</div>
 			{/* Both panels stay mounted so the table keeps its sort and column state. */}
 			<div
@@ -568,43 +628,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				aria-labelledby={tabId('filters')}
 				hidden={tab() !== 'filters'}
 			>
-				<form class="filter-table-form" onSubmit={apply}>
-					<For each={groups()}>
-						{(group) => (
-							<fieldset class="filter-table-fieldset">
-								<Show when={group.name}>
-									<legend class="filter-table-legend">{group.name}</legend>
-								</Show>
-								<For each={group.filters}>
-									{(filter) => (
-										<div class="filter-table-field">
-											<label
-												class="filter-table-label"
-												for={fieldId(filter.key)}
-											>
-												{filter.label}
-											</label>
-											{field(filter)}
-										</div>
-									)}
-								</For>
-							</fieldset>
-						)}
-					</For>
-					<div class="filter-table-form-actions">
-						<button type="button" class="filter-table-button" onClick={reset}>
-							<IconX size={16} aria-hidden="true" />
-							{local.resetLabel ?? 'Reset'}
-						</button>
-						<button
-							type="submit"
-							class="filter-table-button filter-table-button-primary"
-						>
-							<IconSearch size={16} aria-hidden="true" />
-							{local.applyLabel ?? 'Search'}
-						</button>
-					</div>
-				</form>
+				{filterForm()}
 			</div>
 		</div>
 	)
