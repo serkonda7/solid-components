@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, expect, test } from 'vitest'
 import { DataTable, type DataTableColumn, type DataTableProps } from '.'
@@ -144,4 +145,35 @@ test('column order can be controlled', () => {
 	dragOnto(container, 0, 1)
 	expect(changes).toEqual([['name', 'id', 'price']])
 	expect(headers(container)).toEqual(['ID', 'Name', 'Price'])
+})
+
+test('re-showing a hidden column in a resized table fits it to its content', async () => {
+	const [visible, setVisible] = createSignal(['name', 'price'])
+	const container = document.createElement('div')
+	container.style.width = '600px'
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<DataTable
+				rows={rows}
+				columns={columns}
+				getRowId={(row) => row.id}
+				visibleColumns={visible()}
+				resizableColumns
+			/>
+		),
+		container,
+	)
+
+	const handle = container.querySelector<HTMLElement>('.data-table-resize-handle')
+	handle?.dispatchEvent(
+		new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+	)
+	await Promise.resolve()
+
+	setVisible(['name', 'price', 'id'])
+	await Promise.resolve()
+
+	const idHeader = container.querySelector<HTMLElement>('th[data-column-key="id"]')
+	expect(idHeader?.getBoundingClientRect().width).toBeGreaterThanOrEqual(40)
 })

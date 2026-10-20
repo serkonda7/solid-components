@@ -48,6 +48,13 @@ const columns: DataTableColumn<Product>[] = [
 	},
 ]
 
+const minimalColumns: DataTableColumn<Product>[] = [
+	{ key: 'name', label: 'Name', getValue: (product) => product.name },
+	{ key: 'category', label: 'Category', getValue: (product) => product.category },
+	{ key: 'price', label: 'Price', getValue: (product) => `$${product.price}` },
+	{ key: 'stock', label: 'Stock', getValue: (product) => product.stock },
+]
+
 const categoryIcons = { Lighting: IconBulb, Decor: IconPlant, Audio: IconSpeakerphone }
 
 const productOptions: ComboboxOption[] = products.map((product) => ({
@@ -87,7 +94,6 @@ const COLUMN_ORDER_KEY = 'solid-components-example-column-order'
 
 export default function App() {
 	const [page, setPage] = createSignal(readPage())
-	const [selected, setSelected] = createSignal<number[]>([])
 	const [loading, setLoading] = createSignal(false)
 	const [empty, setEmpty] = createSignal(false)
 	const [product, setProduct] = createSignal('')
@@ -138,11 +144,11 @@ export default function App() {
 					</For>
 				</ul>
 			</nav>
-			<main>
+			<main classList={{ wide: page() === 'filter-table' }}>
 				<Switch>
 					<Match when={page() === 'data-table'}>
 						<h1>DataTable example</h1>
-						<p>Sorting, selection, custom cells, actions, loading, and empty states.</p>
+						<p>Sorting, custom cells, actions, loading, and empty states.</p>
 
 						<div class="actions">
 							<button type="button" onClick={() => setLoading((value) => !value)}>
@@ -151,11 +157,6 @@ export default function App() {
 							<button type="button" onClick={() => setEmpty((value) => !value)}>
 								{empty() ? 'Show rows' : 'Show empty state'}
 							</button>
-							<Show when={selected().length > 0}>
-								<button type="button" onClick={() => setSelected([])}>
-									Clear selection ({selected().length})
-								</button>
-							</Show>
 						</div>
 
 						<section class="table-card">
@@ -170,10 +171,9 @@ export default function App() {
 								rows={() => (empty() ? [] : products)}
 								columns={columns}
 								getRowId={(product) => product.id}
-								selected={selected}
-								onSelectionChange={(ids) => setSelected(ids.map(Number))}
 								defaultSort={{ key: 'name', direction: 'asc' }}
 								showColumnCustomizer
+								resizableColumns
 								loading={loading}
 								loadingContent={<p class="table-message">Loading products…</p>}
 								emptyContent={<p class="table-message">No products found.</p>}
@@ -189,6 +189,20 @@ export default function App() {
 										Edit
 									</button>
 								)}
+							/>
+						</section>
+
+						<h2>Minimal</h2>
+						<p>
+							Only <code>rows</code>, <code>columns</code>, and <code>getRowId</code>:
+							no sorting, actions, column customizer, or resizing.
+						</p>
+
+						<section class="table-card">
+							<DataTable
+								rows={products}
+								columns={minimalColumns}
+								getRowId={(product) => product.id}
 							/>
 						</section>
 					</Match>
@@ -214,6 +228,7 @@ export default function App() {
 								onColumnOrderChange={saveColumnOrder}
 								defaultSort={{ key: 'name', direction: 'asc' }}
 								showColumnCustomizer
+								resizableColumns
 								emptyContent={
 									<p class="table-message">No devices match the filters.</p>
 								}

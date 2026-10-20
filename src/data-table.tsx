@@ -9,6 +9,7 @@ import {
 	For,
 	onCleanup,
 	Show,
+	untrack,
 } from 'solid-js'
 
 export type DataTableSortDirection = 'asc' | 'desc'
@@ -24,6 +25,12 @@ export interface DataTableColumn<TRow> {
 	sortable?: boolean
 	sortValue?: (row: TRow) => unknown
 	class?: string
+	/** Column width: a number (px) or any CSS length, e.g. `'12rem'` or `'20%'`. */
+	width?: number | string
+	/** Minimum column width: a number (px) or any CSS length. */
+	minWidth?: number | string
+	/** Maximum column width: a number (px) or any CSS length. */
+	maxWidth?: number | string
 	ariaLabel?: string
 	getValue?: (row: TRow) => JSX.Element
 	/** Whether the column is visible by default when the column customizer is used. Defaults to `true`. */
@@ -38,9 +45,6 @@ export interface DataTableProps<TRow> {
 	getRowId: (row: TRow) => string | number
 	getCell?: (row: TRow, column: DataTableColumn<TRow>) => JSX.Element
 	rowActions?: (row: TRow) => JSX.Element
-	selected?: string[] | number[] | Accessor<string[] | number[]>
-	onSelectionChange?: (ids: (string | number)[]) => void
-	selectionLabel?: string
 	sortKey?: string | Accessor<string | undefined>
 	sortDirection?: DataTableSortDirection | Accessor<DataTableSortDirection>
 	defaultSort?: DataTableSort
@@ -54,6 +58,10 @@ export interface DataTableProps<TRow> {
 	columnOrder?: string[] | Accessor<string[]>
 	defaultColumnOrder?: string[]
 	onColumnOrderChange?: (orderedKeys: string[]) => void
+	/** Shows a drag handle between column headers to resize columns. */
+	resizableColumns?: boolean
+	/** Called with all current pixel widths (by column key) after a resize. */
+	onColumnWidthsChange?: (widths: Record<string, number>) => void
 	showColumnCustomizer?: boolean | Accessor<boolean>
 	columnCustomizerLabel?: string
 	columnCustomizerTitle?: string
@@ -72,15 +80,34 @@ function read<T>(value: T | Accessor<T>): T {
 	return typeof value === 'function' ? (value as Accessor<T>)() : value
 }
 
+function columnStyle<TRow>(
+	column: DataTableColumn<TRow>,
+	override?: number,
+): JSX.CSSProperties | undefined {
+	if (override !== undefined) {
+		return {
+			width: `${override}px`,
+			'min-width': `${override}px`,
+			'max-width': `${override}px`,
+		}
+	}
+	const size = (value: number | string | undefined) =>
+		typeof value === 'number' ? `${value}px` : value
+	const style: JSX.CSSProperties = {}
+	if (column.width !== undefined) style.width = size(column.width)
+	if (column.minWidth !== undefined) style['min-width'] = size(column.minWidth)
+	if (column.maxWidth !== undefined) style['max-width'] = size(column.maxWidth)
+	return Object.keys(style).length > 0 ? style : undefined
+}
+
 /**
  * Generic accessible data table. Data fetching, navigation, and cell content
  * stay with the consuming app; this component owns table structure and the
- * repeated selection/sort/loading states.
+ * repeated sort/loading states.
  */
 export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const rows = createMemo(() => read(props.rows))
 	const loading = () => read(props.loading ?? false)
-	const selected = () => read(props.selected ?? [])
 	const sortControlled = props.sortKey !== undefined || props.sortDirection !== undefined
 	const [internalSort, setInternalSort] = createSignal<DataTableSort | undefined>(
 		props.defaultSort,
@@ -90,13 +117,6 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		sortControlled ? read(props.sortDirection ?? 'asc') : (internalSort()?.direction ?? 'asc')
 	const showCustomizer = () => read(props.showColumnCustomizer ?? false)
 	const toolbar = children(() => props.toolbar)
-	const hasSelection = () => props.selected !== undefined && props.onSelectionChange !== undefined
-	const allSelected = () => {
-		const ids = selected()
-		return (
-			rows().length > 0 && rows().every((row) => ids.includes(props.getRowId(row) as never))
-		)
-	}
 
 	const defaultVisibleKeys = createMemo(
 		() =>
@@ -230,6 +250,86 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		setColumnOrder(columnsInOrder(props.defaultColumnOrder ?? []).map((column) => column.key))
 	}
 
+	const MIN_COLUMN_WIDTH = 40
+	const [widths, setWidths] = createSignal<Record<string, number>>({})
+	const [tableWidth, setTableWidth] = createSignal<number | undefined>()
+	let tableRef: HTMLTableElement | undefined
+
+	createEffect(() => {
+		const keys = visibleColumns().map((column) => column.key)
+		if (!tableRef || untrack(tableWidth) === undefined) return
+		const current = untrack(widths)
+		if (keys.every((key) => current[key] !== undefined)) return
+		const next = { ...current }
+		for (const key of keys) {
+			if (next[key] !== undefined) continue
+			const header = tableRef.querySelector<HTMLElement>(`th[data-column-key="${key}"]`)
+			const index = header
+				? Array.prototype.indexOf.call(header.parentElement?.children, header)
+				: -1
+			let fit = 0
+			for (const row of tableRef.rows) {
+				const cell = row.cells[index]
+				if (cell) fit = Math.max(fit, cell.scrollWidth)
+			}
+			next[key] = Math.max(MIN_COLUMN_WIDTH, Math.ceil(fit))
+		}
+		setWidths(next)
+		const extra = [...tableRef.querySelectorAll<HTMLElement>('thead th:not([data-column-key])')]
+		setTableWidth(
+			keys.reduce((sum, key) => sum + (next[key] ?? 0), 0) +
+				extra.reduce((sum, th) => sum + th.getBoundingClientRect().width, 0),
+		)
+	})
+
+	function startResize(event: PointerEvent, key: string): void {
+		if (!tableRef) return
+		event.preventDefault()
+		event.stopPropagation()
+		const handle = event.currentTarget as HTMLElement
+		handle.setPointerCapture(event.pointerId)
+		const startX = event.clientX
+		const startTable = tableRef.getBoundingClientRect().width
+		const frozen: Record<string, number> = {}
+		for (const th of tableRef.querySelectorAll<HTMLElement>('th[data-column-key]')) {
+			frozen[th.dataset.columnKey as string] = th.getBoundingClientRect().width
+		}
+		const startWidth = frozen[key] ?? MIN_COLUMN_WIDTH
+		let moved = false
+
+		function onMove(e: PointerEvent): void {
+			if (!moved && Math.abs(e.clientX - startX) < 2) return
+			moved = true
+			const next = Math.max(MIN_COLUMN_WIDTH, startWidth + e.clientX - startX)
+			setWidths({ ...frozen, [key]: next })
+			setTableWidth(startTable + next - startWidth)
+		}
+		function onUp(): void {
+			handle.removeEventListener('pointermove', onMove)
+			handle.removeEventListener('pointerup', onUp)
+			handle.removeEventListener('pointercancel', onUp)
+			if (moved) props.onColumnWidthsChange?.(widths())
+		}
+		handle.addEventListener('pointermove', onMove)
+		handle.addEventListener('pointerup', onUp)
+		handle.addEventListener('pointercancel', onUp)
+	}
+
+	function resizeByKey(event: KeyboardEvent, key: string): void {
+		const step = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0
+		if (!step || !tableRef) return
+		event.preventDefault()
+		const frozen: Record<string, number> = {}
+		for (const th of tableRef.querySelectorAll<HTMLElement>('th[data-column-key]')) {
+			frozen[th.dataset.columnKey as string] = th.getBoundingClientRect().width
+		}
+		const current = frozen[key] ?? MIN_COLUMN_WIDTH
+		const next = Math.max(MIN_COLUMN_WIDTH, current + step)
+		setTableWidth(tableRef.getBoundingClientRect().width + next - current)
+		setWidths({ ...frozen, [key]: next })
+		props.onColumnWidthsChange?.(widths())
+	}
+
 	const [draggedKey, setDraggedKey] = createSignal<string | undefined>()
 
 	const customizerId = createUniqueId()
@@ -254,28 +354,6 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 			document.removeEventListener('keydown', onKeyDown)
 		})
 	})
-
-	let selectAllRef: HTMLInputElement | undefined
-	createEffect(() => {
-		if (selectAllRef) {
-			selectAllRef.indeterminate = selected().length > 0 && !allSelected()
-		}
-	})
-
-	function toggleAll(checked: boolean): void {
-		props.onSelectionChange?.(checked ? rows().map(props.getRowId) : [])
-	}
-
-	function toggleRow(row: TRow, checked: boolean): void {
-		const id = props.getRowId(row)
-		const ids = selected()
-		const next = checked ? [...ids, id] : ids.filter((value) => value !== id)
-		props.onSelectionChange?.(next)
-	}
-
-	function isSelected(row: TRow): boolean {
-		return selected().includes(props.getRowId(row) as never)
-	}
 
 	function isColumnVisible(column: DataTableColumn<TRow>): boolean {
 		return column.toggleable === false || visibleSet().has(column.key)
@@ -382,25 +460,20 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				</div>
 			</Show>
 			<div class="data-table-scroll">
-				<table class="data-table">
+				<table
+					ref={tableRef}
+					class="data-table"
+					classList={{ 'data-table-resized': tableWidth() !== undefined }}
+					style={tableWidth() !== undefined ? { width: `${tableWidth()}px` } : undefined}
+				>
 					<thead>
 						<tr>
-							<Show when={hasSelection()}>
-								<th class="data-table-checkbox">
-									<span class="data-table-visually-hidden">Select rows</span>
-									<input
-										ref={selectAllRef}
-										type="checkbox"
-										aria-label={props.selectionLabel ?? 'Select all rows'}
-										checked={allSelected()}
-										onChange={(e) => toggleAll(e.currentTarget.checked)}
-									/>
-								</th>
-							</Show>
 							<For each={visibleColumns()}>
 								{(column) => (
 									<th
 										class={column.class}
+										data-column-key={column.key}
+										style={columnStyle(column, widths()[column.key])}
 										aria-sort={
 											column.sortable
 												? sortKey() === column.key
@@ -438,6 +511,17 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 												</span>
 											</button>
 										</Show>
+										<Show when={props.resizableColumns}>
+											<span
+												class="data-table-resize-handle"
+												role="separator"
+												aria-orientation="vertical"
+												aria-label={`Resize ${column.ariaLabel ?? column.label}`}
+												tabindex="0"
+												onPointerDown={(e) => startResize(e, column.key)}
+												onKeyDown={(e) => resizeByKey(e, column.key)}
+											/>
+										</Show>
 									</th>
 								)}
 							</For>
@@ -450,21 +534,14 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 						<For each={sortedRows()}>
 							{(row) => (
 								<tr>
-									<Show when={hasSelection()}>
-										<td class="data-table-checkbox">
-											<input
-												type="checkbox"
-												aria-label={`Select row ${props.getRowId(row)}`}
-												checked={isSelected(row)}
-												onChange={(e) =>
-													toggleRow(row, e.currentTarget.checked)
-												}
-											/>
-										</td>
-									</Show>
 									<For each={visibleColumns()}>
 										{(column) => (
-											<td class={column.class}>{cell(row, column)}</td>
+											<td
+												class={column.class}
+												style={columnStyle(column, widths()[column.key])}
+											>
+												{cell(row, column)}
+											</td>
 										)}
 									</For>
 									<Show when={props.rowActions}>

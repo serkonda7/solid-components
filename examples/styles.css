@@ -17,6 +17,10 @@ main {
 	padding: 48px 24px;
 }
 
+main.wide {
+	max-width: none;
+}
+
 h1 {
 	margin-bottom: 8px;
 }

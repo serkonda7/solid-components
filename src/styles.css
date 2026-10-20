@@ -121,8 +121,57 @@
 	border-collapse: collapse;
 }
 
-.data-table-checkbox {
-	width: 2rem;
+.data-table-resized {
+	table-layout: fixed;
+	max-width: none;
+}
+
+.data-table-resized th,
+.data-table-resized td {
+	box-sizing: border-box;
+}
+
+.data-table-resized td {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.data-table th:has(> .data-table-resize-handle) {
+	position: relative;
+}
+
+.data-table-resize-handle {
+	position: absolute;
+	z-index: 1;
+	top: 0;
+	right: -4px;
+	bottom: 0;
+	width: 8px;
+	cursor: col-resize;
+	touch-action: none;
+	user-select: none;
+}
+
+.data-table-resize-handle::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 3px;
+	width: 2px;
+}
+
+.data-table-resize-handle:hover::after,
+.data-table-resize-handle:focus-visible::after,
+.data-table-resize-handle:active::after {
+	background: var(
+		--data-table-border,
+		var(--border, light-dark(#8a8a8a, #6a6e75))
+	);
+}
+
+.data-table-resize-handle:focus-visible {
+	outline: none;
 }
 
 .data-table-sort {
@@ -152,15 +201,6 @@
 
 .data-table-status {
 	color: var(--text-secondary, #616161);
-}
-
-.data-table-visually-hidden {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	white-space: nowrap;
 }
 
 /* Combobox: text input plus an absolutely positioned listbox below it. */
