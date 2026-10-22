@@ -139,6 +139,9 @@ Searchable single-select. It renders only the control, so pair it with your own
   (default `No matching objects`), `addLabel` (default `Add`).
 - Options with `detail` render in two columns; `icon` is any
   `Component<{ size?: number }>` (e.g. a tabler icon), also shown in the closed input.
+- `preview` is a `Component` rendered in a panel beside the open list while its
+  option is highlighted (by hover or arrow keys); `aria-hidden`, so the label
+  must still name the option.
 - The current value is mirrored in the input's `data-value` attribute.
 
 ## SearchBar usage

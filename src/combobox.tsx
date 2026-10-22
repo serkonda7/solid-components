@@ -22,6 +22,8 @@ export interface ComboboxOption {
 	detail?: string
 	/** Glyph shown before the label, in the list and in the closed input. */
 	icon?: ComboboxIcon
+	/** Rendered in a panel beside the open list while this option is highlighted. */
+	preview?: Component
 }
 
 export interface ComboboxProps {
@@ -95,6 +97,8 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	const addIndex = (): number => filtered().length
 	const count = (): number => filtered().length + (props.onAdd ? 1 : 0)
 	const editable = (): boolean => !props.disabled && props.onChange !== undefined
+	// The add entry has no option, so it never has a preview.
+	const activePreview = (): Component | undefined => filtered()[active()]?.preview
 
 	onMount(() => {
 		if (props.autofocus === true) {
@@ -310,6 +314,13 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 			</Show>
 			<IconChevronDown class="combobox-chevron" size={16} aria-hidden="true" />
 			<Show when={open()}>{listbox()}</Show>
+			<Show when={open() && activePreview()}>
+				{(preview) => (
+					<div class="combobox-preview" aria-hidden="true">
+						<Dynamic component={preview()} />
+					</div>
+				)}
+			</Show>
 		</div>
 	)
 }

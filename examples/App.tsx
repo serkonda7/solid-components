@@ -57,11 +57,39 @@ const minimalColumns: DataTableColumn<Product>[] = [
 
 const categoryIcons = { Lighting: IconBulb, Decor: IconPlant, Audio: IconSpeakerphone }
 
+/** Line drawing of the Aurora Lamp, the example's graphical preview. */
+function LampSketch() {
+	return (
+		<svg
+			viewBox="0 0 48 48"
+			width="64"
+			height="64"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M16 6 H32 L38 20 H10 Z" fill="currentColor" fill-opacity="0.15" />
+			<path d="M24 20 V40 M15 42 H33" />
+		</svg>
+	)
+}
+
 const productOptions: ComboboxOption[] = products.map((product) => ({
 	value: product.id,
 	label: product.name,
 	detail: product.category,
 	icon: categoryIcons[product.category as keyof typeof categoryIcons],
+	preview:
+		product.id === 1
+			? LampSketch
+			: () => (
+					<span>
+						${product.price} · {product.stock} in stock
+					</span>
+				),
 }))
 
 function deviceCell(device: Device, column: DataTableColumn<Device>) {

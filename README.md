@@ -36,7 +36,7 @@ export default defineConfig({ plugins: [tablerIcons(), solid()] })
 These components are available:
 - `DataTable` - generic table with optional sorting, actions, loading, empty states, and column customizer.
 - `FilterTable` - `DataTable` with filtering: quick search, a grouped filter form, and removable filter pills.
-- `Combobox` - searchable, accessible dropdown with keyboard navigation, option icons, a detail column, and an optional "Add …" entry.
+- `Combobox` - searchable, accessible dropdown with keyboard navigation, option icons and previews, a detail column, and an optional "Add …" entry.
 - `SearchBar` - search input with clear button and a global Ctrl/Cmd+K focus shortcut.
 
 For the full API, examples, and agent notes, see [docs.md](docs.md).

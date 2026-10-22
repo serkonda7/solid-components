@@ -16,7 +16,10 @@ afterEach(() => {
 	document.body.innerHTML = ''
 })
 
-function mount(onAdd?: (query: string) => void): {
+function mount(
+	onAdd?: (query: string) => void,
+	items: ComboboxOption[] = options,
+): {
 	input: HTMLInputElement
 	value: () => string
 } {
@@ -29,7 +32,7 @@ function mount(onAdd?: (query: string) => void): {
 				id="combo"
 				value={value()}
 				onChange={setValue}
-				options={options}
+				options={items}
 				emptyLabel="None"
 				onAdd={onAdd}
 				addLabel="Add item"
@@ -99,4 +102,26 @@ test('Tab picks the active option without blocking focus movement', () => {
 	expect(tab.defaultPrevented).toBe(false)
 	expect(value()).toBe('1')
 	expect(input.getAttribute('aria-expanded')).toBe('false')
+})
+
+test('preview follows the highlighted option while the list is open', () => {
+	const { input } = mount(undefined, [
+		{ value: 1, label: 'Alpha', preview: () => <span>Alpha preview</span> },
+		{ value: 2, label: 'Beta' },
+	])
+	const preview = (): string | null | undefined =>
+		document.querySelector('.combobox-preview')?.textContent
+	expect(preview()).toBeUndefined()
+
+	// Index 0 is the empty entry, which has no preview.
+	press(input, 'ArrowDown')
+	expect(preview()).toBeUndefined()
+	press(input, 'ArrowDown')
+	expect(preview()).toBe('Alpha preview')
+	press(input, 'ArrowDown')
+	expect(preview()).toBeUndefined()
+
+	press(input, 'ArrowUp')
+	press(input, 'Escape')
+	expect(preview()).toBeUndefined()
 })
