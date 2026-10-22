@@ -240,7 +240,10 @@ export default function App() {
 					</Match>
 					<Match when={page() === 'combobox'}>
 						<h1>Combobox example</h1>
-						<p>Type to filter, arrow keys to move, Enter to pick, Escape to close.</p>
+						<p>
+							Type to filter, arrow keys to move, Enter to pick, Escape to close. Tab
+							moves on to the next field.
+						</p>
 
 						<section class="combobox-demo">
 							<label for="product-combobox">Product</label>
@@ -253,6 +256,8 @@ export default function App() {
 								onAdd={(query) => setAdded(query)}
 								addLabel="Add product"
 							/>
+							<label for="quantity-input">Quantity</label>
+							<input id="quantity-input" type="number" min="1" value="1" />
 							<p>
 								Selected value: <code>{product() || '(none)'}</code>
 								<Show when={added() !== undefined}>

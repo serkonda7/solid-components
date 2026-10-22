@@ -89,3 +89,14 @@ test('add entry passes the typed query to onAdd', () => {
 	expect(onAdd).toHaveBeenCalledWith('Delta')
 	expect(value()).toBe('')
 })
+
+test('Tab picks the active option without blocking focus movement', () => {
+	const { input, value } = mount()
+	press(input, 'ArrowDown')
+	press(input, 'ArrowDown')
+	const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+	input.dispatchEvent(tab)
+	expect(tab.defaultPrevented).toBe(false)
+	expect(value()).toBe('1')
+	expect(input.getAttribute('aria-expanded')).toBe('false')
+})

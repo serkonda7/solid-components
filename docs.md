@@ -130,7 +130,8 @@ Searchable single-select. It renders only the control, so pair it with your own
 ```
 
 - Typing filters by `label` and `detail` (case-insensitive substring). Arrow keys
-  wrap around and include the add entry; Enter picks, Escape closes (and stops
+  wrap around and include the add entry; Enter picks, Tab picks and lets focus
+  move on (on the add entry it only closes), Escape closes (and stops
   propagation so enclosing dialogs stay open). Focus never leaves the input; the
   highlight is exposed via `aria-activedescendant` and kept scrolled into view.
 - `onAdd` pins an add entry at the end of the list and receives the trimmed search text.

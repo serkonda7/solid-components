@@ -57,8 +57,9 @@ export interface ComboboxProps {
 /**
  * Searchable dropdown of `options`, with an optional leading empty choice.
  * A text combobox: typing filters the options by label and detail, arrow keys
- * move the highlight (wrapping around), Enter picks it, Escape closes. The
- * input shows the selected label while closed; the value sits in `data-value`.
+ * move the highlight (wrapping around), Enter picks it, Tab picks it and moves
+ * focus on, Escape closes. The input shows the selected label while closed;
+ * the value sits in `data-value`.
  */
 export function Combobox(props: ComboboxProps): JSX.Element {
 	let input: HTMLInputElement | undefined
@@ -152,6 +153,14 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 		if (e.key === 'Enter') {
 			e.preventDefault()
 			pick(active())
+		} else if (e.key === 'Tab') {
+			// Like Enter, but focus moves on to the next field. The add entry
+			// navigates away, so Tab just closes the list there.
+			if (props.onAdd && active() === addIndex()) {
+				setOpen(false)
+			} else {
+				pick(active())
+			}
 		} else if (e.key === 'Escape') {
 			e.preventDefault()
 			e.stopPropagation()
