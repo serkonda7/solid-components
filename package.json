@@ -1,6 +1,6 @@
 {
   "name": "@serkonda7/solid-components",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Reusable components for SolidJS",
   "license": "MIT",
   "author": "serkonda7",
@@ -31,11 +31,11 @@
   "scripts": {
     "lint": "biome check --write",
     "lint:ci": "biome ci",
-    "check": "bun check",
+    "typecheck": "bun check",
     "test": "vitest run",
     "examples": "vite --config examples/vite.config.ts",
     "build:dev": "bun run scripts/build.ts --dev",
-    "build": "bun run check && bun run scripts/build.ts --prod",
+    "build": "bun run typecheck && bun run scripts/build.ts --prod",
     "prepack": "bun run build"
   },
   "engines": {
