@@ -37,6 +37,7 @@ These components are available:
 - `DataTable` - generic table with optional sorting, actions, loading and empty states, column customizer, resizable columns, sticky header and actions, and server-side pagination.
 - `FilterTable` - `DataTable` with filtering: quick search, a grouped filter form, and removable filter pills.
 - `Combobox` - searchable, accessible dropdown with keyboard navigation, option icons and previews, a detail column, and an optional "Add …" entry.
+- `ColorInput` - hex color input with a native color picker swatch.
 - `Modal` - controlled modal dialog with focus trapping and restore, a close button, Escape and backdrop-click closing.
 - `SearchBar` - search input with clear button and a global Ctrl/Cmd+K focus shortcut.
 

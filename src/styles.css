@@ -930,6 +930,67 @@ scroll away with the table. */
 	}
 }
 
+/* ColorInput: hex input with a native color picker as its leading swatch. */
+.color-input {
+	position: relative;
+	display: flex;
+	align-items: center;
+	width: 9rem;
+}
+
+.color-input-text {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 0.375rem 0.5rem 0.375rem 2.25rem;
+	border: 1px solid
+		var(--color-input-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 0.375rem;
+	background: var(
+		--color-input-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	color: inherit;
+	font: inherit;
+}
+
+.color-input-text:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.color-input-picker {
+	position: absolute;
+	left: 0.5rem;
+	width: 1.25rem;
+	height: 1.25rem;
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+	appearance: none;
+}
+
+.color-input-picker:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.color-input-picker::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+
+.color-input-picker::-webkit-color-swatch {
+	border: 1px solid
+		var(--color-input-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 0.25rem;
+}
+
+.color-input-picker::-moz-color-swatch {
+	border: 1px solid
+		var(--color-input-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 0.25rem;
+}
+
 /* SearchBar: input with a leading icon and trailing clear button / shortcut hint. */
 .search-bar {
 	position: relative;

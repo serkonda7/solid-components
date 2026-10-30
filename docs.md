@@ -178,6 +178,22 @@ Controlled search input with a clear button and global Ctrl/Cmd+K focus.
   (`Clear search`).
 - `class` is added to `.search-bar`.
 
+## ColorInput
+
+Controlled hex input with a native color picker swatch.
+
+```tsx
+<ColorInput value={color()} onInput={setColor} ariaLabel="Accent color" />
+```
+
+- `onInput` gets valid colors only, as lowercase `#rrggbb`. The text field accepts
+  `#rgb` and `#rrggbb`, `#` optional. Other text stays while typing and reverts to
+  `value` on blur.
+- There's no empty state: the native picker can't represent one, and shows black
+  for an invalid `value`.
+- Texts: `ariaLabel` (`Color`), `pickerLabel` (`Pick color`). Also `disabled`.
+- `class` is added to `.color-input`, whose default width is `9rem`.
+
 ## Modal
 
 Controlled, on native `<dialog>` (`showModal()`). Content is mounted only while `open`.
@@ -284,6 +300,10 @@ condition, which resolves to the source barrel (~6000 dev requests).
   shadow other bindings.
 - The hint and clear button share the trailing slot; only one renders at a time.
 
+### ColorInput (`src/color-input.tsx`)
+- The text field shows a local draft from typing until blur, not `value`: writing the
+  normalized value back would expand `#abc` while `#abcdef` is being typed.
+
 ## Styling (`src/styles.css`)
 
 Theme via CSS vars with fallbacks and `light-dark()`. `color-scheme` is inherited
@@ -294,6 +314,7 @@ from the consumer; don't set it here.
 - `--filter-table-*`: `border`, `bg`, `muted`, `accent`, `pill-bg`
 - `--combobox-*`: `border`, `bg`, `panel-bg`, `hover-bg`, `muted`, `accent`
 - `--search-bar-*`: `border`, `bg`, `muted`, `hover-bg`
+- `--color-input-*`: `border`, `bg`
 
 ## Verify
 

@@ -1,6 +1,7 @@
 import { IconBulb, IconPlant, IconSpeakerphone } from '@tabler/icons-solidjs'
 import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
 import {
+	ColorInput,
 	Combobox,
 	type ComboboxOption,
 	DataTable,
@@ -112,6 +113,7 @@ const pages = [
 	{ id: 'combobox', label: 'Combobox' },
 	{ id: 'modal', label: 'Modal' },
 	{ id: 'search-bar', label: 'SearchBar' },
+	{ id: 'color-input', label: 'ColorInput' },
 ] as const
 
 type PageId = (typeof pages)[number]['id']
@@ -195,6 +197,7 @@ export default function App() {
 	const [product, setProduct] = createSignal('')
 	const [added, setAdded] = createSignal<string>()
 	const [search, setSearch] = createSignal('')
+	const [color, setColor] = createSignal('#3b82f6')
 	const [modalOpen, setModalOpen] = createSignal(false)
 	const [modalName, setModalName] = createSignal('Aurora Lamp')
 	const [modalDirty, setModalDirty] = createSignal(false)
@@ -492,6 +495,17 @@ export default function App() {
 							<SearchBar value={search()} onInput={setSearch} />
 							<p>
 								Query: <code>{search() || '(empty)'}</code>
+							</p>
+						</section>
+					</Match>
+					<Match when={page() === 'color-input'}>
+						<h1>ColorInput example</h1>
+						<p>Type a hex value or use the color picker.</p>
+
+						<section class="color-input-demo">
+							<ColorInput value={color()} onInput={setColor} />
+							<p>
+								Value: <code>{color()}</code>
 							</p>
 						</section>
 					</Match>

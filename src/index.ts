@@ -6,6 +6,10 @@
  */
 
 export {
+	ColorInput,
+	type ColorInputProps,
+} from './color-input'
+export {
 	Combobox,
 	type ComboboxIcon,
 	type ComboboxOption,
