@@ -593,7 +593,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	}
 
 	function tabCount(name: Tab): number {
-		return name === 'results' ? filteredRows().length : appliedFilters().length
+		if (name !== 'results') return appliedFilters().length
+		return read(tableProps.pagination)?.rowCount ?? filteredRows().length
 	}
 
 	function tabButton(name: Tab): JSX.Element {

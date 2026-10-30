@@ -33,12 +33,14 @@ unsorted; clicking another header starts it at `asc`.
   cycles) or `onSortChange(sort | undefined)` (receives the next state).
 - `onSortClear` additionally fires when the cycle reaches unsorted. All sort
   callbacks also fire in uncontrolled mode.
-- Sorting never changes column widths: the arrow slot has a fixed width.
+- Sorting never changes column widths: the arrow slot has a fixed width. Unsorted
+  sortable headers show a muted `↕` in it, drawn by CSS.
 
 ### Column customizer
 Opt in with `showColumnCustomizer`. The table renders a "Columns" button with a
 dialog listing every column as a checkbox, in display order. Columns are
-reordered by dragging an item or with its move up/down buttons:
+reordered by dragging an item (with touch or a pen: by its grip) or with
+Alt+ArrowUp/Down on a focused item:
 
 ```tsx
 const columns = [
@@ -55,12 +57,78 @@ const columns = [
 - Order is uncontrolled by default; use `defaultColumnOrder` (column keys) for the
   initial order. Controlled with `columnOrder` + `onColumnOrderChange`. Columns
   missing from the order are appended in `columns` order; unknown keys are ignored.
-- `Show all` restores all columns; `Reset` restores the default visibility and order.
+- `Show all` restores all columns; `Reset` restores the default visibility and
+  order and clears the column widths.
 - Labels can be customized via `columnCustomizerLabel`, `columnCustomizerTitle`,
   `columnCustomizerShowAllLabel`, and `columnCustomizerResetLabel`.
 - `FilterTable` passes all of these through to its `DataTable`.
 
-Full interactive coverage (sort, selection, custom cells, actions, loading, empty):
+### Column widths
+`resizableColumns` adds a handle between headers: drag it, use ArrowLeft/Right on
+the focused handle, or double-click it (or press Enter) to fit the column to its
+content.
+
+- Persist with `onColumnWidthsChange`, which receives the pixel widths of all
+  visible columns after each resize and `{}` on `Reset`. It doesn't fire during a
+  drag.
+- Restore with `columnWidths`. It can arrive after mount (e.g. from a backend);
+  each new value replaces the current widths and `{}` returns to automatic layout.
+  It is a restore input, not strict control: resizing works without passing the
+  result back. Columns without a saved width are fitted to their content; unknown
+  keys are ignored.
+- Saved widths apply as they are, without the `minWidth`/`maxWidth` of the column.
+
+### Long tables
+- `stickyHeader` pins the header. Pinning needs a vertical scroll container
+  because `.data-table-scroll` also scrolls sideways, so the table scrolls inside
+  a viewport capped by `--data-table-max-height` (default `80dvh`).
+- `stickyActions` pins the `rowActions` column to the right edge.
+- Hovered rows get `--data-table-row-hover-bg`. Keep it opaque with `stickyActions`.
+- Sticky cells are opaque: match your surface with `--data-table-bg` (actions) and
+  `--data-table-header-bg` (header).
+
+### Loading
+While `loading` with no rows, the table shows `skeletonRows` (default 5) skeleton
+rows and a visually hidden `Loading…` status. With rows it keeps them and shows
+the visible status below, for refetches. `loadingContent` replaces both. The
+table sets `aria-busy` while loading.
+
+### Pagination
+Server-side only: the table never slices `rows`, so `rows` must hold just the
+current page. `pagination` renders the pager; the consumer fetches the page:
+
+```tsx
+const [paging, setPaging] = createSignal({ page: 1, pageSize: 25 })
+
+<DataTable
+  rows={pageRows}
+  columns={columns}
+  getRowId={(item) => item.id}
+  sortKey={() => sort()?.key}
+  sortDirection={() => sort()?.direction ?? 'asc'}
+  onSortChange={(next) => { setSort(next); setPaging({ ...paging(), page: 1 }) }}
+  pagination={() => ({ ...paging(), rowCount: total(), pageSizeOptions: [25, 50, 100] })}
+  onPaginationChange={setPaging}
+  loading={loading}
+/>
+```
+
+- `page` starts at 1 and `rowCount` is the total across all pages.
+- `onPaginationChange({ page, pageSize })` only reports; update `pagination` in
+  response. Changing the page size reports page 1.
+- Use controlled sorting, or only the current page gets sorted. Going back to page
+  1 after a sort or filter change is up to the consumer, as is moving off a page
+  that no longer exists.
+- With `FilterTable` set `manualFiltering`, since a client-side filter would only
+  see the current page. Its results badge shows `rowCount`.
+- Texts: `paginationLabels` (`navigation`, `previous`, `next`, `pageSize`, and
+  `range(first, last, rowCount)`). `pageSizeOptions` omitted hides the select.
+
+### Row selection
+There is no built-in selection. Render checkboxes through `getCell` and keep the
+selected ids in the consumer.
+
+Full interactive coverage (sort, pagination, custom cells, actions, loading, empty):
 `examples/App.tsx`.
 
 ## FilterTable usage
@@ -231,9 +299,15 @@ plugins: [tablerIcons(), solid()] // before solid()
 - TanStack Table owns the row model and the sorting, visibility, order, and sizing
   logic. Its state is derived from the public props and signals; `on*Change`
   handlers map it back to the public callbacks. No TanStack type is public API.
+  Pagination is plain props: the row model never pages, as the server does.
 - Sorting, visibility, and order are controlled table state, so read `table.atoms`
   or those memos, not TanStack's defaults. Sizing is the table's own state and is
-  empty until the first resize, because `width` props may be CSS lengths.
+  empty until the first resize or restore, because `width` props may be CSS
+  lengths. `columnWidths` writes into it instead of replacing it, so a drag can
+  update live while `onColumnWidthsChange` fires only at the end.
+- Fitting measures cloned cells in an offscreen table (`fitColumn`), since cells in
+  place can't report less than their current width. Clear `extraWidth` before the
+  sizing, or the fit effect refills the emptied columns.
 - The resize gesture is custom (pointer capture, a drag threshold, keyboard) rather
   than `columnResizingFeature`, which has no keyboard path and pins on mousedown.
 - Reactive props accept `T | Accessor<T>`; unwrap via `read()`.
@@ -242,13 +316,13 @@ plugins: [tablerIcons(), solid()] // before solid()
 - Sort buttons render for `column.sortable` columns; in controlled mode (`sortKey`
   or `sortDirection` set) only if `onSort` or `onSortChange` is set. The table
   sorts rows only when uncontrolled.
-- Selection column renders only when both `selected` and `onSelectionChange` are set.
-  Select-all uses an `indeterminate` effect on a ref; keep it when refactoring.
 - Visibility state drops unknown keys and omits `toggleable: false` columns from
   tracking (they stay visible implicitly); output keys follow `columns` order.
 - Order state (`columnOrder`) is separate from visibility and always lists every
-  column key, `toggleable: false` columns included. Customizer move buttons
-  restore focus after reordering (covered by `src/data-table.test.tsx`).
+  column key, `toggleable: false` columns included. Alt+Arrow restores focus after
+  reordering; a `toggleable: false` item takes focus on its grip, as its checkbox
+  is disabled (covered by `src/data-table.test.tsx`). The touch drag listens on
+  `document` because reordering can detach the grip.
 - Header markup must not change size with sort state; keep the fixed-width
   `.data-table-sort-indicator` (covered by `src/data-table.test.tsx`).
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
@@ -289,8 +363,10 @@ plugins: [tablerIcons(), solid()] // before solid()
   with the same fallback chain.
 - Combobox themes via `--combobox-*` vars (`border`, `bg`, `panel-bg`, `hover-bg`,
   `muted`, `accent`) with the same fallback chain.
-- Theme via `--data-table-*` vars with fallbacks and `light-dark()`; `color-scheme`
-  is inherited from the consumer, do not set it here.
+- Theme via `--data-table-*` vars (`border`, `bg`, `header-bg`, `row-hover-bg`,
+  `skeleton-bg`, `max-height`, `customizer-bg`, `customizer-hover-bg`, `panel-bg`)
+  with fallbacks and `light-dark()`; `color-scheme` is inherited from the consumer,
+  do not set it here.
 
 ## Verify
 Tests (`src/**/*.test.tsx`) run in headless Chromium via Vitest browser mode, since

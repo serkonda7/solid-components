@@ -1,7 +1,14 @@
 import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, expect, test } from 'vitest'
-import { DataTable, type DataTableColumn, type DataTableProps, type DataTableSort } from '.'
+import {
+	DataTable,
+	type DataTableColumn,
+	type DataTablePagination,
+	type DataTableProps,
+	type DataTableSort,
+	FilterTable,
+} from '.'
 import './styles.css'
 
 type Row = { id: number; name: string; price: number }
@@ -298,4 +305,356 @@ test('resizing by keyboard pins widths and reports them', () => {
 	expect(after[1]).toBeCloseTo(before[1] ?? 0, 0)
 	expect(table.getBoundingClientRect().width).toBeCloseTo(tableBefore + 10, 0)
 	expect(Object.keys(changes[0] ?? {})).toEqual(['name', 'price', 'id'])
+})
+
+function mountTable(extra: Partial<DataTableProps<Row>> = {}, width = '600px'): HTMLElement {
+	const container = document.createElement('div')
+	container.style.width = width
+	document.body.append(container)
+	dispose = render(
+		() => <DataTable rows={rows} columns={columns} getRowId={(row) => row.id} {...extra} />,
+		container,
+	)
+	return container
+}
+
+function pressOnHandle(container: HTMLElement, init: KeyboardEventInit): void {
+	container
+		.querySelector('.data-table-resize-handle')
+		?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+}
+
+const edit = () => <button type="button">Edit</button>
+
+test('column widths can be restored', () => {
+	const container = mountTable({
+		columnWidths: { name: 200, price: 100, id: 80 },
+		rowActions: edit,
+		resizableColumns: true,
+	})
+	const [name, price, id, actions] = columnWidths(container)
+	expect([name, price, id]).toEqual([200, 100, 80])
+	expect(actions).toBeGreaterThan(0)
+	const table = container.querySelector('table')
+	expect(table?.classList.contains('data-table-resized')).toBe(true)
+	expect(table?.getBoundingClientRect().width).toBeCloseTo(380 + (actions ?? 0), 0)
+})
+
+test('restored widths fit columns missing from them and follow the prop', () => {
+	const [saved, setSaved] = createSignal<Record<string, number>>({})
+	const container = mountTable({ columnWidths: saved })
+	const auto = columnWidths(container)
+
+	setSaved({ name: 200, price: 100 })
+	const [name, price, id] = columnWidths(container)
+	expect([name, price]).toEqual([200, 100])
+	expect(id).toBeGreaterThanOrEqual(40)
+
+	setSaved({})
+	expect(columnWidths(container)).toEqual(auto)
+})
+
+test('actions column grows for rows that arrive after widths were restored', () => {
+	const [items, setItems] = createSignal<Row[]>([])
+	const container = mountTable({
+		rows: items,
+		columnWidths: { name: 100, price: 100, id: 100 },
+		rowActions: () => <button type="button">A very long action label</button>,
+	})
+	setItems(rows)
+	const cell = container.querySelector<HTMLElement>('td.data-table-actions')
+	expect(cell?.scrollWidth).toBe(cell?.clientWidth)
+	expect(cell?.querySelector('button')?.getBoundingClientRect().right).toBeLessThanOrEqual(
+		cell?.getBoundingClientRect().right ?? 0,
+	)
+})
+
+test('reset clears column widths', () => {
+	const changes: Record<string, number>[] = []
+	const container = mountCustomizer({
+		resizableColumns: true,
+		onColumnWidthsChange: (widths) => changes.push(widths),
+	})
+	pressOnHandle(container, { key: 'ArrowRight' })
+	expect(container.querySelector('table')?.style.width).not.toBe('')
+
+	container
+		.querySelectorAll<HTMLButtonElement>('.data-table-customizer-actions button')[1]
+		?.click()
+	expect(changes.at(-1)).toEqual({})
+	const table = container.querySelector('table')
+	expect(table?.classList.contains('data-table-resized')).toBe(false)
+	expect(table?.style.width).toBe('')
+	expect(container.querySelector('th')?.style.width).toBe('')
+})
+
+test('double-clicking a resize handle fits the column in both directions', () => {
+	const changes: Record<string, number>[] = []
+	const container = mountTable({
+		columnWidths: { name: 300, price: 100, id: 100 },
+		resizableColumns: true,
+		onColumnWidthsChange: (widths) => changes.push(widths),
+	})
+	const handle = container.querySelector('.data-table-resize-handle')
+	handle?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+	const [fitted, price] = columnWidths(container)
+	expect(fitted).toBeLessThan(100)
+	expect(price).toBe(100)
+	expect(changes.at(-1)?.name).toBe(fitted)
+
+	pressOnHandle(container, { key: 'ArrowLeft' })
+	pressOnHandle(container, { key: 'ArrowLeft' })
+	pressOnHandle(container, { key: 'Enter' })
+	expect(columnWidths(container)[0]).toBe(fitted)
+})
+
+test('autofit does not wrap long cell content', () => {
+	const long = 'A value that is much wider than its pinned column'
+	const container = mountTable({
+		rows: [{ id: 1, name: long, price: 1 }],
+		columnWidths: { name: 80, price: 100, id: 100 },
+		resizableColumns: true,
+	})
+	const cell = container.querySelector('td')
+	const lineHeight = cell?.getBoundingClientRect().height ?? 0
+	expect(lineHeight).toBeGreaterThan(30)
+	container
+		.querySelector('.data-table-resize-handle')
+		?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+	expect(cell?.getBoundingClientRect().height).toBeLessThan(lineHeight)
+})
+
+function customizerLabels(container: HTMLElement): string[] {
+	return [...container.querySelectorAll('.data-table-customizer-item')].map(
+		(item) => item.textContent ?? '',
+	)
+}
+
+test('Alt+Arrow moves a customizer item and keeps focus on it', () => {
+	const changes: string[][] = []
+	const container = mountCustomizer({ onColumnOrderChange: (keys) => changes.push(keys) })
+	const box = container.querySelector<HTMLInputElement>('.data-table-customizer-item input')
+	box?.focus()
+	const press = (key: string, altKey: boolean) =>
+		document.activeElement?.dispatchEvent(
+			new KeyboardEvent('keydown', { key, altKey, bubbles: true, cancelable: true }),
+		)
+
+	press('ArrowDown', false)
+	press('ArrowUp', true)
+	expect(changes).toEqual([])
+
+	press('ArrowDown', true)
+	press('ArrowDown', true)
+	expect(customizerLabels(container)).toEqual(['Price', 'ID', 'Name'])
+	expect(headers(container)).toEqual(['Price', 'ID', 'Name'])
+	expect(document.activeElement).toBe(box)
+
+	press('ArrowDown', true)
+	expect(changes).toHaveLength(2)
+})
+
+test('a non-toggleable customizer item is reachable through its grip', () => {
+	const container = mountCustomizer({
+		columns: [{ ...columns[0], key: 'name', toggleable: false }, ...columns.slice(1)],
+	})
+	const grips = container.querySelectorAll<HTMLElement>('.data-table-customizer-grip')
+	expect([...grips].map((grip) => grip.tabIndex)).toEqual([0, -1, -1])
+
+	grips[0]?.focus()
+	grips[0]?.dispatchEvent(
+		new KeyboardEvent('keydown', {
+			key: 'ArrowDown',
+			altKey: true,
+			bubbles: true,
+			cancelable: true,
+		}),
+	)
+	expect(customizerLabels(container)).toEqual(['Price', 'Name', 'ID'])
+	expect(document.activeElement).toBe(grips[0])
+})
+
+test('a touch drag on the grip reorders columns', () => {
+	const container = mountCustomizer()
+	const items = container.querySelectorAll<HTMLElement>('.data-table-customizer-item')
+	const target = items[2]?.getBoundingClientRect()
+	const point = { clientX: (target?.left ?? 0) + 5, clientY: (target?.top ?? 0) + 5 }
+
+	items[0]
+		?.querySelector('.data-table-customizer-grip')
+		?.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }))
+	expect(items[0]?.classList.contains('data-table-customizer-item-dragging')).toBe(true)
+	document.dispatchEvent(new PointerEvent('pointermove', point))
+	document.dispatchEvent(new PointerEvent('pointerup', point))
+
+	expect(customizerLabels(container)).toEqual(['Price', 'ID', 'Name'])
+	expect(items[0]?.classList.contains('data-table-customizer-item-dragging')).toBe(false)
+	document.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: 0 }))
+	expect(customizerLabels(container)).toEqual(['Price', 'ID', 'Name'])
+})
+
+test('sticky header stays visible while scrolling and sits above sticky actions', () => {
+	const container = mountTable({
+		rows: Array.from({ length: 50 }, (_, i) => ({ id: i, name: `Row ${i}`, price: i })),
+		rowActions: edit,
+		stickyHeader: true,
+		stickyActions: true,
+	})
+	container.style.setProperty('--data-table-max-height', '200px')
+	const scroller = container.querySelector('.data-table-scroll') as HTMLElement
+	expect(scroller.getBoundingClientRect().height).toBe(200)
+
+	scroller.scrollTop = 300
+	const th = container.querySelector('th') as HTMLElement
+	expect(th.getBoundingClientRect().top).toBeCloseTo(scroller.getBoundingClientRect().top, 0)
+	const actionsTh = container.querySelector<HTMLElement>('th.data-table-actions')
+	const actionsTd = container.querySelector<HTMLElement>('td.data-table-actions')
+	expect(Number(getComputedStyle(actionsTh as Element).zIndex)).toBeGreaterThan(
+		Number(getComputedStyle(th).zIndex),
+	)
+	expect(Number(getComputedStyle(th).zIndex)).toBeGreaterThan(
+		Number(getComputedStyle(actionsTd as Element).zIndex),
+	)
+})
+
+test('sticky actions stay visible while scrolling sideways', () => {
+	const container = mountTable(
+		{
+			columnWidths: { name: 300, price: 300, id: 300 },
+			rowActions: edit,
+			stickyActions: true,
+		},
+		'400px',
+	)
+	const scroller = container.querySelector('.data-table-scroll') as HTMLElement
+	scroller.scrollLeft = 100
+	const cell = container.querySelector('td.data-table-actions')
+	expect(cell?.getBoundingClientRect().right).toBeCloseTo(
+		scroller.getBoundingClientRect().right,
+		0,
+	)
+})
+
+test('unsorted sortable headers show an affordance of the same width', () => {
+	const container = mountTable()
+	const indicator = container.querySelector('.data-table-sort-indicator') as HTMLElement
+	expect(getComputedStyle(indicator, '::before').content).toBe('"↕"')
+	expect(indicator.textContent).toBe('')
+	const width = indicator.getBoundingClientRect().width
+
+	sortButton(container, 'Name').click()
+	expect(getComputedStyle(indicator, '::before').content).toBe('none')
+	expect(indicator.getBoundingClientRect().width).toBe(width)
+})
+
+test('loading without rows shows skeleton rows instead of the text', () => {
+	const [loading, setLoading] = createSignal(true)
+	const [items, setItems] = createSignal<Row[]>([])
+	const container = mountTable({
+		rows: items,
+		loading,
+		skeletonRows: 3,
+		rowActions: edit,
+	})
+	expect(container.querySelectorAll('tbody tr')).toHaveLength(3)
+	expect(container.querySelectorAll('.data-table-skeleton')).toHaveLength(12)
+	expect(container.querySelector('table')?.getAttribute('aria-busy')).toBe('true')
+	const status = container.querySelector('.data-table-status')
+	expect(status?.classList.contains('data-table-visually-hidden')).toBe(true)
+
+	setItems(rows)
+	setLoading(false)
+	expect(container.querySelector('.data-table-skeleton')).toBeNull()
+	expect(container.querySelector('table')?.getAttribute('aria-busy')).toBe('false')
+})
+
+test('loading with rows keeps them and shows the text', () => {
+	const container = mountTable({ loading: true })
+	expect(container.querySelector('.data-table-skeleton')).toBeNull()
+	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
+	const status = container.querySelector('.data-table-status')
+	expect(status?.classList.contains('data-table-visually-hidden')).toBe(false)
+})
+
+test('loadingContent replaces the skeleton', () => {
+	const container = mountTable({
+		rows: [],
+		loading: true,
+		loadingContent: <p class="custom">Wait</p>,
+	})
+	expect(container.querySelector('.data-table-skeleton')).toBeNull()
+	expect(container.querySelector('.custom')).not.toBeNull()
+})
+
+function pagerButtons(container: HTMLElement): HTMLButtonElement[] {
+	return [...container.querySelectorAll<HTMLButtonElement>('.data-table-pagination button')]
+}
+
+test('pagination reports the next page and passes rows through', () => {
+	const changes: unknown[] = []
+	const [state, setState] = createSignal<DataTablePagination>({
+		page: 1,
+		pageSize: 3,
+		rowCount: 7,
+		pageSizeOptions: [3, 10],
+	})
+	const container = mountTable({
+		pagination: state,
+		onPaginationChange: (next) => {
+			changes.push(next)
+			setState({ ...state(), ...next })
+		},
+	})
+	const nav = container.querySelector('.data-table-pagination') as HTMLElement
+	const [previous, next] = pagerButtons(container)
+	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
+	expect(nav.textContent).toContain('1–3 of 7')
+	expect(previous?.disabled).toBe(true)
+
+	next?.click()
+	next?.click()
+	expect(nav.textContent).toContain('7–7 of 7')
+	expect(next?.disabled).toBe(true)
+	expect(changes).toEqual([
+		{ page: 2, pageSize: 3 },
+		{ page: 3, pageSize: 3 },
+	])
+
+	const select = nav.querySelector('select') as HTMLSelectElement
+	select.value = '10'
+	select.dispatchEvent(new Event('change', { bubbles: true }))
+	expect(changes.at(-1)).toEqual({ page: 1, pageSize: 10 })
+	expect(nav.textContent).toContain('1–7 of 7')
+	expect(next?.disabled).toBe(true)
+})
+
+test('pagination handles an empty result and custom labels', () => {
+	const container = mountTable({
+		rows: [],
+		pagination: { page: 1, pageSize: 10, rowCount: 0 },
+		paginationLabels: { range: (first, last, count) => `${first}-${last}/${count}` },
+	})
+	const nav = container.querySelector('.data-table-pagination')
+	expect(nav?.textContent).toBe('0-0/0')
+	expect(nav?.querySelector('select')).toBeNull()
+	expect(pagerButtons(container).every((button) => button.disabled)).toBe(true)
+})
+
+test('FilterTable counts all pages in its results badge', () => {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={[]}
+				getRowId={(row) => row.id}
+				manualFiltering
+				pagination={{ page: 1, pageSize: 3, rowCount: 42 }}
+			/>
+		),
+		container,
+	)
+	expect(container.querySelector('.filter-table-badge')?.textContent).toBe('42')
 })

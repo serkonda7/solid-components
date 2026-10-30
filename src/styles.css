@@ -91,9 +91,21 @@
 }
 
 .data-table-customizer-grip {
+	display: inline-flex;
 	flex: none;
 	opacity: 0.5;
 	cursor: grab;
+	touch-action: none;
+}
+
+.data-table-customizer-grip:focus-visible {
+	opacity: 1;
+}
+
+@media (pointer: coarse) {
+	.data-table-customizer-grip {
+		padding: 0.5rem;
+	}
 }
 
 .data-table-customizer-option {
@@ -119,6 +131,13 @@
 	width: 100%;
 	max-width: 100%;
 	border-collapse: collapse;
+}
+
+.data-table tbody tr:hover {
+	background: var(
+		--data-table-row-hover-bg,
+		var(--surface-hover, light-dark(#f5f5f5, #292d33))
+	);
 }
 
 .data-table-resized {
@@ -174,6 +193,65 @@
 	outline: none;
 }
 
+/* Sticky cells need opaque backgrounds and their own edge: collapsed borders
+scroll away with the table. */
+.data-table-scroll:has(> .data-table-sticky-header) {
+	max-height: var(--data-table-max-height, 80dvh);
+}
+
+.data-table.data-table-sticky-header th {
+	position: sticky;
+	z-index: 2;
+	top: 0;
+	background: var(
+		--data-table-header-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	box-shadow: inset 0 -1px 0
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+}
+
+/* A sticky header cell is painted over the part that overhangs its neighbour. */
+.data-table-sticky-header .data-table-resize-handle {
+	right: 0;
+}
+
+.data-table.data-table-sticky-actions .data-table-actions {
+	position: sticky;
+	z-index: 1;
+	right: 0;
+	background: var(
+		--data-table-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	box-shadow: inset 1px 0 0
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+}
+
+.data-table.data-table-sticky-actions tbody tr:hover .data-table-actions {
+	background: var(
+		--data-table-row-hover-bg,
+		var(--surface-hover, light-dark(#f5f5f5, #292d33))
+	);
+}
+
+.data-table.data-table-sticky-actions th.data-table-actions {
+	z-index: 3;
+	background: var(
+		--data-table-header-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+}
+
+.data-table.data-table-sticky-header.data-table-sticky-actions
+	th.data-table-actions {
+	box-shadow:
+		inset 1px 0 0
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #3a3e45))),
+		inset 0 -1px 0
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+}
+
 .data-table-sort {
 	padding: 0;
 	border: none;
@@ -199,8 +277,101 @@
 	text-align: center;
 }
 
+.data-table-sort-indicator:empty::before {
+	content: "↕";
+	opacity: 0.4;
+}
+
+.data-table-sort:hover .data-table-sort-indicator:empty::before {
+	opacity: 0.8;
+}
+
 .data-table-status {
 	color: var(--text-secondary, #616161);
+}
+
+.data-table-visually-hidden {
+	position: absolute;
+	overflow: hidden;
+	width: 1px;
+	height: 1px;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.data-table-skeleton {
+	display: block;
+	width: 70%;
+	min-width: 2.5rem;
+	height: 1em;
+	border-radius: 0.25rem;
+	background: var(
+		--data-table-skeleton-bg,
+		var(--border, light-dark(#e4e4e4, #30343a))
+	);
+	animation: data-table-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes data-table-skeleton-pulse {
+	50% {
+		opacity: 0.45;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.data-table-skeleton {
+		animation: none;
+	}
+}
+
+.data-table-pagination {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.5rem 0.75rem;
+	padding: 0.5rem 0;
+}
+
+.data-table-page-size {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.data-table-pagination select,
+.data-table-pagination button {
+	border: 1px solid
+		var(--data-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 0.375rem;
+	background: var(
+		--data-table-customizer-bg,
+		var(--surface, light-dark(#ffffff, #1d2024))
+	);
+	color: inherit;
+	font: inherit;
+}
+
+.data-table-pagination select {
+	padding: 0.25rem;
+}
+
+.data-table-pagination button {
+	display: inline-flex;
+	padding: 0.25rem;
+	cursor: pointer;
+}
+
+.data-table-pagination button:hover:enabled {
+	background: var(
+		--data-table-customizer-hover-bg,
+		var(--surface-hover, light-dark(#f5f5f5, #292d33))
+	);
+}
+
+.data-table-pagination button:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
 }
 
 /* Combobox: text input plus an absolutely positioned listbox below it. */

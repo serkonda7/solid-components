@@ -24,8 +24,14 @@
 	font-size: 14px;
 }
 
-.data-table tbody tr:hover {
-	background: #22262b;
+.table-card {
+	--data-table-bg: #191b1e;
+	--data-table-header-bg: #1e2023;
+	--data-table-row-hover-bg: #22262b;
+}
+
+.table-card .data-table-pagination {
+	padding: 8px 16px;
 }
 
 .table-message {

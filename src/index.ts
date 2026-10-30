@@ -14,6 +14,8 @@ export {
 export {
 	DataTable,
 	type DataTableColumn,
+	type DataTablePagination,
+	type DataTablePaginationLabels,
 	type DataTableProps,
 	type DataTableSort,
 	type DataTableSortDirection,

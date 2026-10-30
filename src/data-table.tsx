@@ -1,4 +1,4 @@
-import { IconMenu } from '@tabler/icons-solidjs'
+import { IconChevronLeft, IconChevronRight, IconMenu } from '@tabler/icons-solidjs'
 import {
 	type ColumnDef,
 	type ColumnSizingState,
@@ -55,6 +55,29 @@ export interface DataTableColumn<TRow> {
 	toggleable?: boolean
 }
 
+export interface DataTablePagination {
+	/** Current page, starting at 1. */
+	page: number
+	pageSize: number
+	/** Total rows across all pages. */
+	rowCount: number
+	/** Choices of the rows-per-page select; hidden when omitted. */
+	pageSizeOptions?: number[]
+}
+
+export interface DataTablePaginationLabels {
+	/** Accessible name of the pagination landmark. Defaults to `Pagination`. */
+	navigation?: string
+	/** Defaults to `Previous page`. */
+	previous?: string
+	/** Defaults to `Next page`. */
+	next?: string
+	/** Defaults to `Rows per page`. */
+	pageSize?: string
+	/** Defaults to `1–25 of 120`. */
+	range?: (first: number, last: number, rowCount: number) => string
+}
+
 export interface DataTableProps<TRow> {
 	rows: TRow[] | Accessor<TRow[]>
 	columns: DataTableColumn<TRow>[]
@@ -76,7 +99,9 @@ export interface DataTableProps<TRow> {
 	onColumnOrderChange?: (orderedKeys: string[]) => void
 	/** Shows a drag handle between column headers to resize columns. */
 	resizableColumns?: boolean
-	/** Called with all current pixel widths (by column key) after a resize. */
+	/** Restores pixel widths (by column key); a new value replaces the current widths, `{}` clears them. */
+	columnWidths?: Record<string, number> | Accessor<Record<string, number>>
+	/** Called with all current pixel widths (by column key) after a resize, and with `{}` on reset. */
 	onColumnWidthsChange?: (widths: Record<string, number>) => void
 	showColumnCustomizer?: boolean | Accessor<boolean>
 	columnCustomizerLabel?: string
@@ -85,14 +110,26 @@ export interface DataTableProps<TRow> {
 	columnCustomizerResetLabel?: string
 	/** Content rendered at the start of the toolbar, before the column customizer. */
 	toolbar?: JSX.Element
+	/** Keeps the header visible while the rows scroll, inside a viewport capped by `--data-table-max-height`. */
+	stickyHeader?: boolean
+	/** Keeps the `rowActions` column visible while the columns scroll horizontally. */
+	stickyActions?: boolean
+	/** Renders a pager for server-side pagination; `rows` must hold only the current page. */
+	pagination?: DataTablePagination | Accessor<DataTablePagination>
+	onPaginationChange?: (pagination: { page: number; pageSize: number }) => void
+	paginationLabels?: DataTablePaginationLabels
 	loading?: boolean | Accessor<boolean>
 	empty?: boolean | Accessor<boolean>
+	/** Replaces the skeleton rows and the loading text. */
 	loadingContent?: JSX.Element
+	/** Skeleton rows shown while loading without rows. Defaults to 5. */
+	skeletonRows?: number
 	emptyContent?: JSX.Element
 	class?: string
 }
 
 const MIN_COLUMN_WIDTH = 40
+const DEFAULT_SKELETON_ROWS = 5
 
 const features = tableFeatures({
 	rowSortingFeature,
@@ -300,6 +337,8 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		const keys = props.columns.map((column) => column.key)
 		const known = (props.defaultColumnOrder ?? []).filter((key) => keys.includes(key))
 		setColumnOrder([...new Set([...known, ...keys])])
+		clearWidths()
+		props.onColumnWidthsChange?.({})
 	}
 
 	// Pixel widths once resized; until then the browser lays out the columns.
@@ -312,26 +351,66 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 	let tableRef: HTMLTableElement | undefined
 
+	function clearWidths(): void {
+		// In this order: without an extra width, nothing refits the emptied columns.
+		setExtraWidth(undefined)
+		table.setColumnSizing({})
+	}
+
+	/**
+	 * Content width of the column at `index`. Cells can't report it in place: they
+	 * fill their column, so it is measured on copies in an unconstrained table that
+	 * sits beside the real one and picks up the same CSS.
+	 */
+	function fitColumn(index: number): number {
+		if (!tableRef) return 0
+		const probe = tableRef.cloneNode(false) as HTMLTableElement
+		probe.classList.remove('data-table-resized')
+		probe.style.cssText = 'position:absolute;visibility:hidden;width:max-content;max-width:none'
+		for (const row of tableRef.rows) {
+			const cell = row.cells[index]?.cloneNode(true) as HTMLTableCellElement | undefined
+			if (!cell) continue
+			cell.removeAttribute('style')
+			probe.insertRow().append(cell)
+		}
+		tableRef.after(probe)
+		const width = probe.getBoundingClientRect().width
+		probe.remove()
+		return Math.ceil(width)
+	}
+
+	const actionsIndex = () => visibleColumns().length
+
+	createEffect(() => {
+		if (props.columnWidths === undefined) return
+		const restored = read(props.columnWidths)
+		if (Object.keys(restored).length === 0) {
+			clearWidths()
+			return
+		}
+		table.setColumnSizing(restored)
+		setExtraWidth((extra) => extra ?? (props.rowActions ? fitColumn(untrack(actionsIndex)) : 0))
+	})
+
+	// Columns without a width, e.g. one that was re-shown or added since the widths were saved.
 	createEffect(() => {
 		const keys = visibleColumns().map((column) => column.key)
-		if (!tableRef || untrack(extraWidth) === undefined) return
-		const current = untrack(widths)
-		if (keys.every((key) => current[key] !== undefined)) return
+		const current = widths()
+		if (extraWidth() === undefined || keys.every((key) => current[key] !== undefined)) return
 		const next = { ...current }
-		for (const key of keys) {
-			if (next[key] !== undefined) continue
-			const header = tableRef.querySelector<HTMLElement>(`th[data-column-key="${key}"]`)
-			const index = header
-				? Array.prototype.indexOf.call(header.parentElement?.children, header)
-				: -1
-			let fit = 0
-			for (const row of tableRef.rows) {
-				const cell = row.cells[index]
-				if (cell) fit = Math.max(fit, cell.scrollWidth)
-			}
-			next[key] = Math.max(MIN_COLUMN_WIDTH, Math.ceil(fit))
+		for (const [index, key] of keys.entries()) {
+			next[key] ??= Math.max(MIN_COLUMN_WIDTH, fitColumn(index))
 		}
 		table.setColumnSizing(next)
+	})
+
+	// Pinned widths hold the actions column to its size when they were set, which
+	// can predate the rows.
+	createEffect(() => {
+		sortedRows()
+		const extra = untrack(extraWidth)
+		if (!props.rowActions || extra === undefined) return
+		setExtraWidth(Math.max(extra, fitColumn(untrack(actionsIndex))))
 	})
 
 	/** Current rendered widths, which resizing pins so other columns don't shift. */
@@ -377,7 +456,20 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		handle.addEventListener('pointercancel', onUp)
 	}
 
+	function autofit(key: string): void {
+		if (!tableRef) return
+		const index = visibleColumns().findIndex((column) => column.key === key)
+		const { sizing, extra } = measureWidths(tableRef)
+		applyWidths({ ...sizing, [key]: Math.max(MIN_COLUMN_WIDTH, fitColumn(index)) }, extra)
+		props.onColumnWidthsChange?.(widths())
+	}
+
 	function resizeByKey(event: KeyboardEvent, key: string): void {
+		if (event.key === 'Enter') {
+			event.preventDefault()
+			autofit(key)
+			return
+		}
 		const step = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0
 		if (!step || !tableRef) return
 		event.preventDefault()
@@ -443,7 +535,41 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		moveColumn(key, index)
 	}
 
+	function moveByKey(e: KeyboardEvent, column: DataTableColumn<TRow>, index: number): void {
+		const step = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0
+		if (!e.altKey || !step) return
+		e.preventDefault()
+		const focused = document.activeElement as HTMLElement | null
+		moveColumn(column.key, index + step)
+		// Reordering may detach the focused element.
+		focused?.focus()
+	}
+
+	/** Native drag and drop doesn't reach touch input, so the grip tracks the pointer itself. */
+	function startPointerDrag(e: PointerEvent, column: DataTableColumn<TRow>): void {
+		if (e.pointerType === 'mouse') return
+		setDraggedKey(column.key)
+		// On the document: reordering may detach the grip, which ends pointer capture.
+		function onMove(event: PointerEvent): void {
+			const item = document
+				.elementFromPoint(event.clientX, event.clientY)
+				?.closest('.data-table-customizer-item')
+			if (!item?.parentElement) return
+			moveColumn(column.key, Array.prototype.indexOf.call(item.parentElement.children, item))
+		}
+		function onUp(): void {
+			document.removeEventListener('pointermove', onMove)
+			document.removeEventListener('pointerup', onUp)
+			document.removeEventListener('pointercancel', onUp)
+			setDraggedKey(undefined)
+		}
+		document.addEventListener('pointermove', onMove)
+		document.addEventListener('pointerup', onUp)
+		document.addEventListener('pointercancel', onUp)
+	}
+
 	function customizerItem(column: DataTableColumn<TRow>, index: () => number): JSX.Element {
+		const label = column.ariaLabel ?? column.label
 		return (
 			<li
 				class="data-table-customizer-item"
@@ -453,18 +579,32 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				onDragOver={(e) => onDragOver(e, index())}
 				onDrop={(e) => e.preventDefault()}
 				onDragEnd={() => setDraggedKey(undefined)}
+				onKeyDown={(e) => moveByKey(e, column, index())}
 			>
-				<IconMenu class="data-table-customizer-grip" size={14} aria-hidden="true" />
+				{/* Keyboard users reach an item through its checkbox; a disabled one can't take focus, so its grip does. */}
+				{/* biome-ignore lint/a11y/useSemanticElements: the grip is where a native drag starts, which a <button> doesn't reliably do */}
+				{/* biome-ignore lint/a11y/useFocusableInteractive: tabindex is set, just not literally */}
+				<span
+					class="data-table-customizer-grip"
+					role="button"
+					aria-label={`Reorder ${label}`}
+					aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+					tabindex={column.toggleable === false ? 0 : -1}
+					onPointerDown={(e) => startPointerDrag(e, column)}
+				>
+					<IconMenu size={14} aria-hidden="true" />
+				</span>
 				<label class="data-table-customizer-option">
 					<input
 						type="checkbox"
 						checked={columnVisibility()[column.key]}
 						disabled={column.toggleable === false}
+						aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
 						onChange={(e) =>
 							table.getColumn(column.key)?.toggleVisibility(e.currentTarget.checked)
 						}
 					/>
-					{column.ariaLabel ?? column.label}
+					{label}
 				</label>
 			</li>
 		)
@@ -546,6 +686,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 						tabindex="0"
 						onPointerDown={(e) => startResize(e, column.key)}
 						onKeyDown={(e) => resizeByKey(e, column.key)}
+						onDblClick={() => autofit(column.key)}
 					/>
 				</Show>
 			</th>
@@ -563,14 +704,108 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					)}
 				</For>
 				<Show when={props.rowActions}>
-					<td>{props.rowActions?.(row)}</td>
+					<td class="data-table-actions">{props.rowActions?.(row)}</td>
 				</Show>
 			</tr>
 		)
 	}
 
+	function skeletonRow(): JSX.Element {
+		return (
+			// biome-ignore lint/a11y/noAriaHiddenOnFocusable: skeleton cells hold nothing focusable
+			<tr aria-hidden="true">
+				<For each={visibleColumns()}>
+					{(column) => (
+						<td class={column.class} style={columnStyle(column, widths()[column.key])}>
+							<span class="data-table-skeleton" />
+						</td>
+					)}
+				</For>
+				<Show when={props.rowActions}>
+					<td class="data-table-actions">
+						<span class="data-table-skeleton" />
+					</td>
+				</Show>
+			</tr>
+		)
+	}
+
+	const pagination = () => read(props.pagination)
+	const pageCount = () => {
+		const current = pagination()
+		return current ? Math.max(1, Math.ceil(current.rowCount / current.pageSize)) : 1
+	}
+
+	function changePage(page: number): void {
+		const current = pagination()
+		if (current) props.onPaginationChange?.({ page, pageSize: current.pageSize })
+	}
+
+	function rangeLabel(current: DataTablePagination): string {
+		const first = Math.min((current.page - 1) * current.pageSize + 1, current.rowCount)
+		const last = Math.min(current.page * current.pageSize, current.rowCount)
+		const format = props.paginationLabels?.range
+		return format
+			? format(first, last, current.rowCount)
+			: `${first}–${last} of ${current.rowCount}`
+	}
+
+	function pager(current: () => DataTablePagination): JSX.Element {
+		return (
+			<nav
+				class="data-table-pagination"
+				aria-label={props.paginationLabels?.navigation ?? 'Pagination'}
+			>
+				<Show when={current().pageSizeOptions}>
+					{(options) => (
+						<label class="data-table-page-size">
+							{props.paginationLabels?.pageSize ?? 'Rows per page'}
+							<select
+								value={current().pageSize}
+								onChange={(e) =>
+									props.onPaginationChange?.({
+										page: 1,
+										pageSize: Number(e.currentTarget.value),
+									})
+								}
+							>
+								<For each={options()}>
+									{(size) => (
+										<option value={size} selected={size === current().pageSize}>
+											{size}
+										</option>
+									)}
+								</For>
+							</select>
+						</label>
+					)}
+				</Show>
+				<span aria-live="polite">{rangeLabel(current())}</span>
+				<button
+					type="button"
+					aria-label={props.paginationLabels?.previous ?? 'Previous page'}
+					disabled={current().page <= 1}
+					onClick={() => changePage(current().page - 1)}
+				>
+					<IconChevronLeft size={16} aria-hidden="true" />
+				</button>
+				<button
+					type="button"
+					aria-label={props.paginationLabels?.next ?? 'Next page'}
+					disabled={current().page >= pageCount()}
+					onClick={() => changePage(current().page + 1)}
+				>
+					<IconChevronRight size={16} aria-hidden="true" />
+				</button>
+			</nav>
+		)
+	}
+
 	const showEmpty = (): boolean =>
 		!loading() && (props.empty === undefined ? rows().length === 0 : read(props.empty))
+
+	const showSkeleton = (): boolean =>
+		loading() && sortedRows().length === 0 && props.loadingContent === undefined
 
 	return (
 		<div class={`data-table-wrap${props.class ? ` ${props.class}` : ''}`}>
@@ -586,28 +821,51 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				<table
 					ref={tableRef}
 					class="data-table"
-					classList={{ 'data-table-resized': tableWidth() !== undefined }}
+					classList={{
+						'data-table-resized': tableWidth() !== undefined,
+						'data-table-sticky-header': props.stickyHeader,
+						'data-table-sticky-actions': props.stickyActions,
+					}}
+					aria-busy={loading()}
 					style={tableWidth() !== undefined ? { width: `${tableWidth()}px` } : undefined}
 				>
 					<thead>
 						<tr>
 							<For each={visibleColumns()}>{headerCell}</For>
 							<Show when={props.rowActions}>
-								<th>Actions</th>
+								<th class="data-table-actions">Actions</th>
 							</Show>
 						</tr>
 					</thead>
 					<tbody>
 						<For each={sortedRows()}>{bodyRow}</For>
+						<Show when={showSkeleton()}>
+							<For
+								each={Array.from({
+									length: props.skeletonRows ?? DEFAULT_SKELETON_ROWS,
+								})}
+							>
+								{skeletonRow}
+							</For>
+						</Show>
 					</tbody>
 				</table>
 			</div>
 			<Show when={loading()}>
-				{props.loadingContent ?? <p class="data-table-status">Loading…</p>}
+				{props.loadingContent ?? (
+					<p
+						class="data-table-status"
+						classList={{ 'data-table-visually-hidden': showSkeleton() }}
+						role="status"
+					>
+						Loading…
+					</p>
+				)}
 			</Show>
 			<Show when={showEmpty()}>
 				{props.emptyContent ?? <p class="data-table-status">No results.</p>}
 			</Show>
+			<Show when={pagination()}>{pager}</Show>
 		</div>
 	)
 }

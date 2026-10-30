@@ -34,7 +34,7 @@ export default defineConfig({ plugins: [tablerIcons(), solid()] })
 ```
 
 These components are available:
-- `DataTable` - generic table with optional sorting, actions, loading, empty states, and column customizer.
+- `DataTable` - generic table with optional sorting, actions, loading and empty states, column customizer, resizable columns, sticky header and actions, and server-side pagination.
 - `FilterTable` - `DataTable` with filtering: quick search, a grouped filter form, and removable filter pills.
 - `Combobox` - searchable, accessible dropdown with keyboard navigation, option icons and previews, a detail column, and an optional "Add …" entry.
 - `Modal` - controlled modal dialog with focus trapping and restore, a close button, Escape and backdrop-click closing.

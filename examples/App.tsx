@@ -1,10 +1,12 @@
 import { IconBulb, IconPlant, IconSpeakerphone } from '@tabler/icons-solidjs'
-import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
 import {
 	Combobox,
 	type ComboboxOption,
 	DataTable,
 	type DataTableColumn,
+	type DataTablePagination,
+	type DataTableSort,
 	FilterTable,
 	type FilterTableSavedFilter,
 	type FilterTableValues,
@@ -121,6 +123,70 @@ function readPage(): PageId {
 
 const SAVED_FILTERS_KEY = 'solid-components-example-saved-filters'
 const COLUMN_ORDER_KEY = 'solid-components-example-column-order'
+const COLUMN_WIDTHS_KEY = 'solid-components-example-column-widths'
+
+/** Stands in for a backend: `rows` is only ever the requested page. */
+function fetchDevices(sort: DataTableSort | undefined, page: number, pageSize: number) {
+	const direction = sort?.direction === 'desc' ? -1 : 1
+	const value = (device: Device) => String(device[sort?.key as keyof Device] ?? '')
+	const sorted = sort
+		? [...devices].sort((a, b) => direction * value(a).localeCompare(value(b)))
+		: devices
+	const start = (page - 1) * pageSize
+	return new Promise<Device[]>((resolve) => {
+		setTimeout(() => resolve(sorted.slice(start, start + pageSize)), 400)
+	})
+}
+
+function ServerSideTable() {
+	const [sort, setSort] = createSignal<DataTableSort>()
+	const [paging, setPaging] = createSignal({ page: 1, pageSize: 5 })
+	const [rows, setRows] = createSignal<Device[]>([])
+	const [loading, setLoading] = createSignal(true)
+	let latest = 0
+
+	createEffect(() => {
+		const request = ++latest
+		const { page, pageSize } = paging()
+		setLoading(true)
+		fetchDevices(sort(), page, pageSize).then((next) => {
+			if (request !== latest) return
+			setRows(next)
+			setLoading(false)
+		})
+	})
+
+	const pagination = (): DataTablePagination => ({
+		...paging(),
+		rowCount: devices.length,
+		pageSizeOptions: [5, 10, 25],
+	})
+
+	return (
+		<DataTable
+			rows={rows}
+			columns={deviceColumns}
+			getRowId={(device) => device.id}
+			getCell={deviceCell}
+			sortKey={() => sort()?.key}
+			sortDirection={() => sort()?.direction ?? 'asc'}
+			onSortChange={(next) => {
+				setSort(next)
+				setPaging((current) => ({ ...current, page: 1 }))
+			}}
+			pagination={pagination}
+			onPaginationChange={setPaging}
+			loading={loading}
+			stickyHeader
+			stickyActions
+			rowActions={(device) => (
+				<button type="button" aria-label={`Open ${device.name}`}>
+					Open
+				</button>
+			)}
+		/>
+	)
+}
 
 export default function App() {
 	const [page, setPage] = createSignal(readPage())
@@ -148,6 +214,15 @@ export default function App() {
 	function saveColumnOrder(next: string[]): void {
 		localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(next))
 		setColumnOrder(next)
+	}
+
+	const [columnWidths, setColumnWidths] = createSignal<Record<string, number>>(
+		JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY) ?? '{}'),
+	)
+
+	function saveColumnWidths(next: Record<string, number>): void {
+		localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(next))
+		setColumnWidths(next)
 	}
 
 	const onHashChange = () => {
@@ -200,14 +275,13 @@ export default function App() {
 								<span class="count">{products.length} items</span>
 							</header>
 							<DataTable
-								rows={() => (empty() ? [] : products)}
+								rows={() => (empty() || loading() ? [] : products)}
 								columns={columns}
 								getRowId={(product) => product.id}
 								defaultSort={{ key: 'name', direction: 'asc' }}
 								showColumnCustomizer
 								resizableColumns
 								loading={loading}
-								loadingContent={<p class="table-message">Loading products…</p>}
 								emptyContent={<p class="table-message">No products found.</p>}
 								getCell={(product, column) =>
 									column.key === 'stock' && product.stock === 0 ? (
@@ -222,6 +296,16 @@ export default function App() {
 									</button>
 								)}
 							/>
+						</section>
+
+						<h2>Server-side pagination</h2>
+						<p>
+							Sorting and paging request one page at a time from a simulated backend,
+							with a sticky header and actions column.
+						</p>
+
+						<section class="table-card">
+							<ServerSideTable />
 						</section>
 
 						<h2>Minimal</h2>
@@ -242,7 +326,8 @@ export default function App() {
 						<h1>FilterTable example</h1>
 						<p>
 							Device inventory: quick search, a grouped filter form, removable filter
-							pills, saved filters, and column order (kept in localStorage).
+							pills, saved filters, and column order and widths (kept in
+							localStorage).
 						</p>
 
 						<section class="table-card filter-table-demo">
@@ -258,6 +343,8 @@ export default function App() {
 								onSavedFiltersChange={saveFilters}
 								columnOrder={columnOrder}
 								onColumnOrderChange={saveColumnOrder}
+								columnWidths={columnWidths}
+								onColumnWidthsChange={saveColumnWidths}
 								defaultSort={{ key: 'name', direction: 'asc' }}
 								showColumnCustomizer
 								resizableColumns
