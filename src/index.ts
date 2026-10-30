@@ -28,6 +28,7 @@ export {
 	type FilterTableSavedFilter,
 	type FilterTableValue,
 	type FilterTableValues,
+	parseFilterTableRange,
 } from './filter-table'
 export {
 	Modal,

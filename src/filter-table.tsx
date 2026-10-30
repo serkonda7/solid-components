@@ -18,15 +18,20 @@ import {
 	createUniqueId,
 	For,
 	on,
+	onCleanup,
 	Show,
 	splitProps,
 } from 'solid-js'
 import { Combobox, type ComboboxOption } from './combobox'
 import { DataTable, type DataTableProps } from './data-table'
 
-export type FilterTableFilterType = 'text' | 'select' | 'boolean'
+export type FilterTableFilterType = 'text' | 'select' | 'boolean' | 'number-range' | 'date-range'
 
-/** A filter's value: text for `text`/`boolean` (`'true'`/`'false'`), a list for `select`. */
+/**
+ * A filter's value: text for `text`/`boolean` (`'true'`/`'false'`), a list for
+ * `select`, and `min..max` for ranges, with either bound left empty (`10..`, `..20`).
+ * Date bounds are `YYYY-MM-DD`. Read ranges with `parseFilterTableRange`.
+ */
 export type FilterTableValue = string | string[]
 
 /**
@@ -54,6 +59,8 @@ export interface FilterTableFilter<TRow> {
 	/** Choices of a `select` filter; derived from the row values when omitted. */
 	options?: ComboboxOption[]
 	placeholder?: string
+	/** Formats a range bound in the filter pills; defaults to the raw value. */
+	formatValue?: (value: string) => string
 }
 
 export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'toolbar'> {
@@ -71,8 +78,12 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	onSavedFiltersChange?: (savedFilters: FilterTableSavedFilter[]) => void
 	/** Pass `rows` through unfiltered, e.g. when the server applies `filterValues`. */
 	manualFiltering?: boolean
+	/** Results badge count; defaults to `pagination.rowCount`, then the rows shown. */
+	totalCount?: number | Accessor<number | undefined>
 	/** Shows the quick search input above the table. Defaults to `true`. */
 	quickSearch?: boolean
+	/** Milliseconds to wait after typing before searching. Defaults to 300 with `manualFiltering`, else 0. */
+	quickSearchDebounce?: number
 	/** Text matched by the quick search; defaults to the row's column values. */
 	getSearchText?: (row: TRow) => string
 	quickSearchLabel?: string
@@ -84,6 +95,8 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	anyLabel?: string
 	yesLabel?: string
 	noLabel?: string
+	fromLabel?: string
+	toLabel?: string
 	savedFiltersLabel?: string
 	saveLabel?: string
 	saveNameLabel?: string
@@ -92,6 +105,8 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 }
 
 const QUICK_SEARCH_KEY = 'q'
+const DEFAULT_MANUAL_DEBOUNCE = 300
+const RANGE_SEPARATOR = '..'
 /** Table column holding each row's search text, which is what the quick search filters. */
 const SEARCH_COLUMN = '__search__'
 
@@ -100,6 +115,16 @@ const features = tableFeatures({
 	globalFilteringFeature,
 	filteredRowModel: createFilteredRowModel(),
 })
+
+/** Splits a `min..max` filter value; an open bound is `''`. */
+export function parseFilterTableRange(value: string): { min: string; max: string } {
+	const [min = '', max = ''] = value.split(RANGE_SEPARATOR)
+	return { min, max }
+}
+
+function formatRange(min: string, max: string): string {
+	return min === '' && max === '' ? '' : `${min}${RANGE_SEPARATOR}${max}`
+}
 
 function read<T>(value: T | Accessor<T>): T {
 	return typeof value === 'function' ? (value as Accessor<T>)() : value
@@ -138,6 +163,31 @@ function asText(value: unknown): string {
 		: ''
 }
 
+/** The local `YYYY-MM-DD` day of a date value, which sorts as text. */
+function toDay(value: unknown): string | undefined {
+	if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+	if (!(value instanceof Date || typeof value === 'string' || typeof value === 'number')) {
+		return undefined
+	}
+	const date = new Date(value)
+	if (Number.isNaN(date.getTime())) return undefined
+	const month = String(date.getMonth() + 1).padStart(2, '0')
+	const day = String(date.getDate()).padStart(2, '0')
+	return `${date.getFullYear()}-${month}-${day}`
+}
+
+function inNumberRange(value: unknown, min: string, max: string): boolean {
+	if (value == null || value === '') return false
+	const number = Number(value)
+	if (Number.isNaN(number)) return false
+	return (min === '' || number >= Number(min)) && (max === '' || number <= Number(max))
+}
+
+function inDateRange(value: unknown, min: string, max: string): boolean {
+	const day = toDay(value)
+	return day !== undefined && (min === '' || day >= min) && (max === '' || day <= max)
+}
+
 /**
  * `DataTable` with filtering: a Results tab with a quick search and
  * removable pills for the applied filters, and a Filters tab with a grouped form
@@ -153,7 +203,9 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'savedFilters',
 		'onSavedFiltersChange',
 		'manualFiltering',
+		'totalCount',
 		'quickSearch',
+		'quickSearchDebounce',
 		'getSearchText',
 		'quickSearchLabel',
 		'resultsLabel',
@@ -164,6 +216,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'anyLabel',
 		'yesLabel',
 		'noLabel',
+		'fromLabel',
+		'toLabel',
 		'savedFiltersLabel',
 		'saveLabel',
 		'saveNameLabel',
@@ -180,7 +234,12 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	)
 
 	function setValues(next: FilterTableValues): void {
-		const normalized = normalize(next)
+		// A change made while a search is pending must not drop the typed text.
+		const pending = searchTimer !== undefined
+		cancelSearch()
+		const normalized = normalize(
+			pending ? { ...next, [QUICK_SEARCH_KEY]: searchInput() } : next,
+		)
 		if (local.filterValues === undefined) setInternalValues(normalized)
 		local.onFilterValuesChange?.(normalized)
 	}
@@ -190,6 +249,48 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	}
 
 	const quickSearch = () => asText(values()[QUICK_SEARCH_KEY])
+	// The input's text, which runs ahead of the applied search while debouncing.
+	const [searchInput, setSearchInput] = createSignal(quickSearch())
+	let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+	function cancelSearch(): void {
+		clearTimeout(searchTimer)
+		searchTimer = undefined
+	}
+	onCleanup(cancelSearch)
+
+	function commitSearch(): void {
+		if (searchInput().trim() !== quickSearch()) setValue(QUICK_SEARCH_KEY, searchInput())
+	}
+
+	function flushSearch(): void {
+		if (searchTimer === undefined) return
+		cancelSearch()
+		commitSearch()
+	}
+
+	function onSearchInput(text: string): void {
+		setSearchInput(text)
+		cancelSearch()
+		const delay =
+			local.quickSearchDebounce ?? (local.manualFiltering ? DEFAULT_MANUAL_DEBOUNCE : 0)
+		if (delay <= 0) {
+			commitSearch()
+			return
+		}
+		searchTimer = setTimeout(() => {
+			searchTimer = undefined
+			commitSearch()
+		}, delay)
+	}
+
+	createEffect(
+		on(quickSearch, (applied) => {
+			if (searchTimer === undefined && applied !== searchInput().trim())
+				setSearchInput(applied)
+		}),
+	)
+
 	const appliedFilters = createMemo(() => local.filters.filter((f) => isActive(values()[f.key])))
 
 	function filterValue(row: TRow, filter: FilterTableFilter<TRow>): unknown {
@@ -205,6 +306,11 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			return candidates.some((candidate) => wanted.includes(asText(candidate)))
 		}
 		if (filter.type === 'boolean') return Boolean(actual) === (value === 'true')
+		if (filter.type === 'number-range' || filter.type === 'date-range') {
+			const { min, max } = parseFilterTableRange(asText(value))
+			const inRange = filter.type === 'date-range' ? inDateRange : inNumberRange
+			return inRange(actual, min, max)
+		}
 		return asText(actual).toLowerCase().includes(asText(value).toLowerCase())
 	}
 
@@ -258,24 +364,46 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 
 	const filteredRows = createMemo(() => table.getRowModel().rows.map((row) => row.original))
 
+	/** Sorted row values by `select` filter. Manually filtered rows are only a subset, so these accumulate. */
+	const derivedOptions = createMemo((previous: Map<string, string[]>) => {
+		const next = new Map<string, string[]>()
+		for (const filter of local.filters) {
+			if (filter.type !== 'select' || filter.options) continue
+			const seen = new Set(local.manualFiltering ? previous.get(filter.key) : undefined)
+			for (const row of rows()) {
+				const value = filterValue(row, filter)
+				for (const item of Array.isArray(value) ? value : [value]) {
+					const text = asText(item)
+					if (text !== '') seen.add(text)
+				}
+			}
+			next.set(
+				filter.key,
+				[...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+			)
+		}
+		return next
+	}, new Map())
+
 	function options(filter: FilterTableFilter<TRow>): ComboboxOption[] {
 		if (filter.options) return filter.options
-		const seen = new Set<string>()
-		for (const row of rows()) {
-			const value = filterValue(row, filter)
-			for (const item of Array.isArray(value) ? value : [value]) {
-				const text = asText(item)
-				if (text !== '') seen.add(text)
-			}
-		}
-		return [...seen]
-			.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-			.map((value) => ({ value, label: value }))
+		return (derivedOptions().get(filter.key) ?? []).map((value) => ({ value, label: value }))
+	}
+
+	function rangeLabel(filter: FilterTableFilter<TRow>, value: string): string {
+		const format = filter.formatValue ?? ((bound: string) => bound)
+		const { min, max } = parseFilterTableRange(value)
+		if (max === '') return `≥ ${format(min)}`
+		if (min === '') return `≤ ${format(max)}`
+		return `${format(min)} – ${format(max)}`
 	}
 
 	function optionLabel(filter: FilterTableFilter<TRow>, value: string): string {
 		if (filter.type === 'boolean') {
 			return value === 'true' ? (local.yesLabel ?? 'Yes') : (local.noLabel ?? 'No')
+		}
+		if (filter.type === 'number-range' || filter.type === 'date-range') {
+			return rangeLabel(filter, value)
 		}
 		if (filter.type !== 'select') return value
 		return options(filter).find((option) => String(option.value) === value)?.label ?? value
@@ -315,10 +443,14 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 
 	function applySaved(name: string): void {
 		const saved = savedFilters()?.find((s) => s.name === name)
-		if (saved) setValues(saved.values)
+		if (!saved) return
+		cancelSearch()
+		setSearchInput(asText(saved.values[QUICK_SEARCH_KEY]))
+		setValues(saved.values)
 	}
 
 	function startSaving(): void {
+		flushSearch()
 		setSavedName(currentSaved()?.name ?? '')
 		setNaming(true)
 	}
@@ -431,7 +563,49 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		)
 	}
 
+	function rangeField(filter: FilterTableFilter<TRow>): JSX.Element {
+		const type = filter.type === 'date-range' ? 'date' : 'number'
+		const range = () => parseFilterTableRange(asText(draftValue(filter.key)))
+		// Memos: rewriting a number input's value would wipe a partial entry like `-`.
+		const min = createMemo(() => range().min)
+		const max = createMemo(() => range().max)
+		const fromLabel = () => local.fromLabel ?? 'From'
+		const toLabel = () => local.toLabel ?? 'To'
+		return (
+			<div class="filter-table-range">
+				<input
+					id={fieldId(filter.key)}
+					class="filter-table-input"
+					type={type}
+					step="any"
+					max={max() || undefined}
+					aria-label={`${filter.label} ${fromLabel()}`}
+					placeholder={fromLabel()}
+					value={min()}
+					onInput={(e) =>
+						setDraftValue(filter.key, formatRange(e.currentTarget.value, max()))
+					}
+				/>
+				<input
+					class="filter-table-input"
+					type={type}
+					step="any"
+					min={min() || undefined}
+					aria-label={`${filter.label} ${toLabel()}`}
+					placeholder={toLabel()}
+					value={max()}
+					onInput={(e) =>
+						setDraftValue(filter.key, formatRange(min(), e.currentTarget.value))
+					}
+				/>
+			</div>
+		)
+	}
+
 	function field(filter: FilterTableFilter<TRow>): JSX.Element {
+		if (filter.type === 'number-range' || filter.type === 'date-range') {
+			return rangeField(filter)
+		}
 		if (filter.type === 'text') {
 			return (
 				<input
@@ -470,8 +644,11 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					class="filter-table-input"
 					aria-label={local.quickSearchLabel ?? 'Quick search'}
 					placeholder={local.quickSearchLabel ?? 'Quick search'}
-					value={quickSearch()}
-					onInput={(e) => setValue(QUICK_SEARCH_KEY, e.currentTarget.value)}
+					value={searchInput()}
+					onInput={(e) => onSearchInput(e.currentTarget.value)}
+					onKeyDown={(e) => {
+						if (e.key === 'Enter') flushSearch()
+					}}
 				/>
 			</div>
 		)
@@ -594,7 +771,9 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 
 	function tabCount(name: Tab): number {
 		if (name !== 'results') return appliedFilters().length
-		return read(tableProps.pagination)?.rowCount ?? filteredRows().length
+		return (
+			read(local.totalCount) ?? read(tableProps.pagination)?.rowCount ?? filteredRows().length
+		)
 	}
 
 	function tabButton(name: Tab): JSX.Element {

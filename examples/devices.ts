@@ -459,6 +459,7 @@ export const deviceFilters: FilterTableFilter<Device>[] = [
 		})),
 	},
 	{ key: 'rack', label: 'Rack', type: 'text', group: 'Location' },
+	{ key: 'position', label: 'Rack position', type: 'number-range', group: 'Location' },
 	{ key: 'manufacturer', label: 'Manufacturer', type: 'select', group: 'Hardware' },
 	{ key: 'model', label: 'Model', type: 'select', group: 'Hardware' },
 	{ key: 'platform', label: 'Platform', type: 'select', group: 'Hardware' },
@@ -471,4 +472,13 @@ export const deviceFilters: FilterTableFilter<Device>[] = [
 		getValue: (device) => device.primaryIp !== null,
 	},
 	{ key: 'monitored', label: 'Monitored', type: 'boolean', group: 'Management' },
+	{
+		key: 'installed',
+		label: 'Installed',
+		type: 'date-range',
+		group: 'Management',
+		// The demo data has no dates, so spread the devices over 2025.
+		getValue: (device) => new Date(2025, 0, 1 + device.id * 7),
+		formatValue: (value) => new Date(`${value}T00:00`).toLocaleDateString(),
+	},
 ]

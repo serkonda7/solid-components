@@ -6,6 +6,7 @@ import {
 	FilterTable,
 	type FilterTableFilter,
 	type FilterTableSavedFilter,
+	parseFilterTableRange,
 } from '.'
 import './styles.css'
 
@@ -274,4 +275,275 @@ test('custom match replaces the built-in matching', () => {
 		container,
 	)
 	expect(names(container)).toEqual(['Planter', 'Spotlight'])
+})
+
+function search(container: HTMLElement): HTMLInputElement {
+	const found = container.querySelector<HTMLInputElement>('input[type="search"]')
+	if (!found) throw new Error('No quick search')
+	return found
+}
+
+test('quick search debounces and keeps the typed text', () => {
+	vi.useFakeTimers()
+	try {
+		const onChange = vi.fn()
+		const container = document.createElement('div')
+		document.body.append(container)
+		dispose = render(
+			() => (
+				<FilterTable
+					rows={rows}
+					columns={columns}
+					filters={filters}
+					getRowId={(row) => row.id}
+					quickSearchDebounce={200}
+					onFilterValuesChange={onChange}
+				/>
+			),
+			container,
+		)
+		const box = search(container)
+
+		type(box, 'sp')
+		vi.advanceTimersByTime(150)
+		type(box, 'spo ')
+		vi.advanceTimersByTime(150)
+		expect(onChange).not.toHaveBeenCalled()
+		expect(names(container)).toHaveLength(4)
+
+		vi.advanceTimersByTime(50)
+		expect(onChange).toHaveBeenCalledTimes(1)
+		expect(onChange).toHaveBeenLastCalledWith({ q: 'spo' })
+		expect(names(container)).toEqual(['Spotlight'])
+		expect(box.value).toBe('spo ')
+
+		type(box, 'lamp')
+		press(box, 'Enter')
+		expect(onChange).toHaveBeenLastCalledWith({ q: 'lamp' })
+		vi.advanceTimersByTime(500)
+		expect(onChange).toHaveBeenCalledTimes(2)
+	} finally {
+		vi.useRealTimers()
+	}
+})
+
+test('manual filtering debounces by default and other changes keep a pending search', () => {
+	vi.useFakeTimers()
+	try {
+		const onChange = vi.fn()
+		const container = document.createElement('div')
+		document.body.append(container)
+		dispose = render(
+			() => (
+				<FilterTable
+					rows={rows}
+					columns={columns}
+					filters={filters}
+					getRowId={(row) => row.id}
+					defaultFilterValues={{ name: 'a' }}
+					onFilterValuesChange={onChange}
+					manualFiltering
+				/>
+			),
+			container,
+		)
+		type(search(container), 'lamp')
+		expect(onChange).not.toHaveBeenCalled()
+
+		container.querySelector<HTMLButtonElement>('.filter-table-pill')?.click()
+		expect(onChange).toHaveBeenCalledTimes(1)
+		expect(onChange).toHaveBeenLastCalledWith({ q: 'lamp' })
+		expect(search(container).value).toBe('lamp')
+
+		vi.advanceTimersByTime(500)
+		expect(onChange).toHaveBeenCalledTimes(1)
+	} finally {
+		vi.useRealTimers()
+	}
+})
+
+test('derived select options survive manually filtered rows', () => {
+	const [items, setItems] = createSignal(rows)
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={items}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+				manualFiltering
+			/>
+		),
+		container,
+	)
+	setItems(rows.filter((row) => row.category === 'Audio'))
+
+	tab(container, 'Filters').click()
+	const category = input(container, 'Category')
+	type(category, 'light')
+	press(category, 'Enter')
+	expect(container.querySelector('.filter-table-chip')?.textContent).toBe('Lighting')
+})
+
+test('derived select options follow the rows without manual filtering', () => {
+	const [items, setItems] = createSignal(rows)
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={items}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+			/>
+		),
+		container,
+	)
+	setItems(rows.filter((row) => row.category === 'Audio'))
+
+	tab(container, 'Filters').click()
+	const category = input(container, 'Category')
+	type(category, 'light')
+	press(category, 'Enter')
+	expect(container.querySelector('.filter-table-chip')).toBeNull()
+})
+
+test('results badge prefers totalCount, then pagination, then the shown rows', () => {
+	const [total, setTotal] = createSignal<number | undefined>(120)
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+				totalCount={total}
+				pagination={{ page: 1, pageSize: 25, rowCount: 80 }}
+				manualFiltering
+			/>
+		),
+		container,
+	)
+	expect(tab(container, 'Results').textContent).toBe('Results120')
+
+	setTotal(undefined)
+	expect(tab(container, 'Results').textContent).toBe('Results80')
+})
+
+test('manual filtering without pagination shows totalCount', () => {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+				totalCount={120}
+				manualFiltering
+			/>
+		),
+		container,
+	)
+	expect(tab(container, 'Results').textContent).toBe('Results120')
+})
+
+type Dated = Row & { added: string | Date | null }
+
+const dated: Dated[] = [
+	{ ...rows[0], added: '2026-01-10' } as Dated,
+	{ ...rows[1], added: new Date(2026, 1, 15, 23, 30) } as Dated,
+	{ ...rows[2], added: new Date(2026, 2, 20, 12).toISOString() } as Dated,
+	{ ...rows[3], added: null } as Dated,
+]
+
+const rangeFilters: FilterTableFilter<Dated>[] = [
+	{ key: 'stock', label: 'Stock', type: 'number-range' },
+	{
+		key: 'added',
+		label: 'Added',
+		type: 'date-range',
+		formatValue: (value) => value.split('-').reverse().join('.'),
+	},
+]
+
+function mountRanges(values: Record<string, string>, onChange?: (v: unknown) => void) {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={dated}
+				columns={columns as DataTableColumn<Dated>[]}
+				filters={rangeFilters}
+				getRowId={(row) => row.id}
+				defaultFilterValues={values}
+				onFilterValuesChange={onChange}
+			/>
+		),
+		container,
+	)
+	return container
+}
+
+test('number range filters are inclusive, open ended, and skip empty values', () => {
+	expect(names(mountRanges({ stock: '1..2' }))).toEqual(['Speaker'])
+	dispose?.()
+	document.body.innerHTML = ''
+
+	expect(names(mountRanges({ stock: '2..' }))).toEqual(['Lamp', 'Speaker'])
+	dispose?.()
+	document.body.innerHTML = ''
+
+	expect(names(mountRanges({ stock: '..0' }))).toEqual(['Planter', 'Spotlight'])
+})
+
+test('date range filters compare local days of any date value', () => {
+	expect(names(mountRanges({ added: '2026-02-15..2026-03-20' }))).toEqual(['Planter', 'Speaker'])
+	dispose?.()
+	document.body.innerHTML = ''
+
+	expect(names(mountRanges({ added: '..2026-01-10' }))).toEqual(['Lamp'])
+})
+
+test('range form applies bounds and pills format them', () => {
+	const onChange = vi.fn()
+	const container = mountRanges({}, onChange)
+	tab(container, 'Filters').click()
+
+	const stock = container.querySelector<HTMLInputElement>('input[aria-label="Stock To"]')
+	if (!stock) throw new Error('No range input')
+	type(input(container, 'Stock'), '1')
+	type(stock, '4')
+	type(input(container, 'Added'), '2026-01-01')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+
+	expect(onChange).toHaveBeenLastCalledWith({ stock: '1..4', added: '2026-01-01..' })
+	expect(names(container)).toEqual(['Lamp', 'Speaker'])
+	const pills = [...container.querySelectorAll<HTMLButtonElement>('.filter-table-pill')]
+	expect(pills.map((p) => p.textContent)).toEqual([
+		'Stock: 1 – 4',
+		'Added: ≥ 01.01.2026',
+		'Clear all',
+	])
+
+	pills[0]?.click()
+	expect(onChange).toHaveBeenLastCalledWith({ added: '2026-01-01..' })
+
+	tab(container, 'Filters').click()
+	type(input(container, 'Added'), '')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(onChange).toHaveBeenLastCalledWith({})
+})
+
+test('parseFilterTableRange splits open bounds', () => {
+	expect(parseFilterTableRange('1.5..2')).toEqual({ min: '1.5', max: '2' })
+	expect(parseFilterTableRange('..2')).toEqual({ min: '', max: '2' })
+	expect(parseFilterTableRange('2026-01-01..')).toEqual({ min: '2026-01-01', max: '' })
 })

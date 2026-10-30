@@ -86,7 +86,8 @@ Server-side only: `rows` holds just the current page.
   response. A page size change reports page 1.
 - Use controlled sorting, or only the current page gets sorted. Resetting the page
   after a sort or filter change, or when it no longer exists, is up to the consumer.
-- With `FilterTable`, set `manualFiltering`.
+- With `FilterTable`, set `manualFiltering`; `pagination.rowCount` feeds the Results
+  badge, or pass `totalCount` to override it.
 - Omitting `pageSizeOptions` hides the select. Texts: `paginationLabels`
   (`navigation`, `previous`, `next`, `pageSize`, `range(first, last, rowCount)`).
 
@@ -99,6 +100,8 @@ const filters: FilterTableFilter<Device>[] = [
   { key: 'name', label: 'Name', type: 'text' },
   { key: 'site', label: 'Site', type: 'select', group: 'Location', options: siteOptions },
   { key: 'active', label: 'Active', type: 'boolean', getValue: (d) => d.status === 'active' },
+  { key: 'ports', label: 'Ports', type: 'number-range' },
+  { key: 'seen', label: 'Last seen', type: 'date-range' },
 ]
 
 <FilterTable rows={devices} columns={columns} filters={filters} getRowId={(d) => d.id} />
@@ -106,21 +109,31 @@ const filters: FilterTableFilter<Device>[] = [
 
 - Filter types: `text` (case-insensitive substring), `select` (multi-select, matches
   any value, row values may be arrays, `options` default to distinct row values),
-  `boolean` (against `Boolean(value)`). Values: `getValue(row)`, else `row[key]`.
+  `boolean` (against `Boolean(value)`), `number-range`, `date-range` (inclusive; row
+  values may be a `Date`, timestamp, or date string, compared by local day; rows
+  without a value never match). Values: `getValue(row)`, else `row[key]`.
   `match(row, value)` replaces the built-in matching.
+- Range values are strings: `min..max`, either bound may be empty (`10..`, `..20`),
+  dates as `YYYY-MM-DD`. `parseFilterTableRange(value)` returns `{ min, max }`.
+  `formatValue(bound)` on the filter formats bounds in the pills.
 - Filter form edits stay a draft until "Search"/Enter. "Reset" keeps the quick search.
 - Quick search matches `getSearchText(row)`, default the column values; hide it
-  with `quickSearch={false}`.
+  with `quickSearch={false}`. `quickSearchDebounce` (ms, default 300 with
+  `manualFiltering`, else 0) delays applying it; Enter applies at once.
 - State is `FilterTableValues`: `{ [filterKey]: string | string[], q }`, inactive
   filters omitted, so it maps onto URL params. Use `defaultFilterValues`, or
   control with `filterValues`. `onFilterValuesChange` always fires.
-- `manualFiltering` passes `rows` through, for server-side filtering.
+- `manualFiltering` passes `rows` through, for server-side filtering. Derived `select`
+  options then accumulate over the rows seen, so they don't shrink but only hold
+  loaded values; pass `options` for the full list.
+- The Results badge shows `totalCount`, else `pagination.rowCount`, else the rows
+  shown. Pass `totalCount` for `manualFiltering` without `pagination`.
 - Saved filters: pass `savedFilters` (`{ name, values }[]`, even `[]`) +
   `onSavedFiltersChange`. Saving replaces an entry of the same name. Persistence
   and deletion are up to the consumer.
 - Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`,
   `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
-  `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
+  `fromLabel`, `toLabel`, `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
   `clearSavedFilterLabel`.
 
 ## Combobox

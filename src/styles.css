@@ -813,6 +813,16 @@ scroll away with the table. */
 	min-width: 0;
 }
 
+.filter-table-range {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.filter-table-range .filter-table-input {
+	flex: 1;
+	min-width: 0;
+}
+
 .filter-table-form {
 	/* Label column width and gap; group headings are indented by both so they
 	line up with the inputs. */
