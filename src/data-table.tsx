@@ -1,4 +1,20 @@
 import { IconMenu } from '@tabler/icons-solidjs'
+import {
+	type ColumnDef,
+	type ColumnSizingState,
+	type ColumnVisibilityState,
+	columnOrderingFeature,
+	columnSizingFeature,
+	columnVisibilityFeature,
+	createSortedRowModel,
+	createTable,
+	functionalUpdate,
+	type RowData,
+	rowSortingFeature,
+	type SortingState,
+	tableFeatures,
+	type Updater,
+} from '@tanstack/solid-table'
 import type { Accessor, JSX } from 'solid-js'
 import {
 	children,
@@ -76,6 +92,24 @@ export interface DataTableProps<TRow> {
 	class?: string
 }
 
+const MIN_COLUMN_WIDTH = 40
+
+const features = tableFeatures({
+	rowSortingFeature,
+	sortedRowModel: createSortedRowModel(),
+	columnVisibilityFeature,
+	columnOrderingFeature,
+	columnSizingFeature,
+})
+
+function compareSortValues(left: unknown, right: unknown): number {
+	if (left === right) return 0
+	if (left == null) return -1
+	if (right == null) return 1
+	if (typeof left === 'number' && typeof right === 'number') return left - right
+	return String(left).localeCompare(String(right), undefined, { numeric: true })
+}
+
 function read<T>(value: T | Accessor<T>): T {
 	return typeof value === 'function' ? (value as Accessor<T>)() : value
 }
@@ -132,69 +166,96 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		props.visibleColumns !== undefined
 			? read(props.visibleColumns)
 			: (uncontrolledVisible() ?? defaultVisibleKeys())
-	const visibleSet = createMemo(() => new Set(visibleKeys()))
+	const columnVisibility = createMemo<ColumnVisibilityState>(() => {
+		const visible = new Set(visibleKeys())
+		return Object.fromEntries(
+			props.columns.map((column) => [
+				column.key,
+				column.toggleable === false || visible.has(column.key),
+			]),
+		)
+	})
 
 	const [uncontrolledOrder, setUncontrolledOrder] = createSignal<string[] | undefined>(undefined)
-	/** Columns sorted by `keys`; unknown keys are dropped, unlisted columns appended. */
-	function columnsInOrder(keys: string[]): DataTableColumn<TRow>[] {
-		const byKey = new Map(props.columns.map((column) => [column.key, column] as const))
-		const ordered = [...new Set(keys)].flatMap((key) => byKey.get(key) ?? [])
-		const placed = new Set(ordered)
-		return [...ordered, ...props.columns.filter((column) => !placed.has(column))]
-	}
-	const orderedColumns = createMemo(() =>
-		columnsInOrder(
-			props.columnOrder !== undefined
-				? read(props.columnOrder)
-				: (uncontrolledOrder() ?? props.defaultColumnOrder ?? []),
+	const columnOrder = () =>
+		props.columnOrder !== undefined
+			? read(props.columnOrder)
+			: (uncontrolledOrder() ?? props.defaultColumnOrder ?? [])
+	const sorting = createMemo<SortingState>(() => {
+		const key = sortKey()
+		return key === undefined ? [] : [{ id: key, desc: sortDirection() === 'desc' }]
+	})
+	// Public row types stay unconstrained; TanStack only requires object rows.
+	type TableRow = TRow & RowData
+	const columnDefs = createMemo(() =>
+		props.columns.map(
+			(column): ColumnDef<typeof features, TableRow> => ({
+				id: column.key,
+				accessorFn: (row) =>
+					column.sortValue
+						? column.sortValue(row)
+						: (row as Record<string, unknown>)[column.key],
+				enableHiding: column.toggleable !== false,
+				sortFn: (left, right, id) =>
+					compareSortValues(left.getValue(id), right.getValue(id)),
+			}),
 		),
 	)
-	const visibleColumns = createMemo(() =>
-		orderedColumns().filter(
-			(column) => column.toggleable === false || visibleSet().has(column.key),
-		),
+
+	const table = createTable<typeof features, TableRow>({
+		features,
+		get data() {
+			return rows() as TableRow[]
+		},
+		get columns() {
+			return columnDefs()
+		},
+		getRowId: (row) => String(props.getRowId(row)),
+		manualSorting: sortControlled,
+		enableMultiSort: false,
+		sortDescFirst: false,
+		defaultColumn: { minSize: MIN_COLUMN_WIDTH },
+		state: {
+			get sorting() {
+				return sorting()
+			},
+			get columnVisibility() {
+				return columnVisibility()
+			},
+			get columnOrder() {
+				return columnOrder()
+			},
+		},
+		onSortingChange: changeSort,
+		onColumnVisibilityChange: changeVisibility,
+		onColumnOrderChange: (updater) => setColumnOrder(functionalUpdate(updater, columnOrder())),
+	})
+
+	/** The consumer's columns for table columns; rendering stays keyed on them. */
+	const columnsByKey = createMemo(
+		() => new Map(props.columns.map((column) => [column.key, column] as const)),
 	)
+	const toDataColumns = (columns: { id: string }[]) =>
+		columns.flatMap((column) => columnsByKey().get(column.id) ?? [])
+	const orderedColumns = createMemo(() => toDataColumns(table.getAllLeafColumns()))
+	const visibleColumns = createMemo(() => toDataColumns(table.getVisibleLeafColumns()))
+	// Rows are keyed by the consumer's objects so their DOM survives new `rows` arrays.
+	const sortedRows = createMemo(() => table.getRowModel().rows.map((row) => row.original))
 	const toggleableColumns = createMemo(() =>
 		props.columns.filter((column) => column.toggleable !== false),
 	)
 	const allToggleableKeys = createMemo(() => toggleableColumns().map((column) => column.key))
 
-	function sortValue(row: TRow, column: DataTableColumn<TRow>): unknown {
-		if (column.sortValue) return column.sortValue(row)
-		return (row as Record<string, unknown>)[column.key]
-	}
-
-	function compareSortValues(left: unknown, right: unknown): number {
-		if (left === right) return 0
-		if (left == null) return -1
-		if (right == null) return 1
-		if (typeof left === 'number' && typeof right === 'number') return left - right
-		return String(left).localeCompare(String(right), undefined, { numeric: true })
-	}
-
-	const sortedRows = createMemo(() => {
-		const currentRows = rows()
-		const key = sortKey()
-		if (sortControlled || !key) return currentRows
-
-		const column = props.columns.find((candidate) => candidate.key === key)
-		if (!column) return currentRows
-		const direction = sortDirection() === 'asc' ? 1 : -1
-		return [...currentRows].sort(
-			(left, right) =>
-				direction * compareSortValues(sortValue(left, column), sortValue(right, column)),
-		)
-	})
-
-	/** Cycles the clicked column through `asc` → `desc` → unsorted. */
-	function changeSort(key: string): void {
-		const active = sortKey() === key
-		const next: DataTableSort | undefined =
-			active && sortDirection() === 'desc'
-				? undefined
-				: { key, direction: active ? 'desc' : 'asc' }
+	function changeSort(updater: Updater<SortingState>): void {
+		const [entry] = functionalUpdate(updater, sorting())
+		const next: DataTableSort | undefined = entry && {
+			key: entry.id,
+			direction: entry.desc ? 'desc' : 'asc',
+		}
+		// Only the sorted column can cycle to unsorted.
+		const key = next?.key ?? sortKey()
 		if (!sortControlled) setInternalSort(next)
-		props.onSort?.(key)
+		if (key !== undefined) props.onSort?.(key)
 		if (!next) props.onSortClear?.()
 		props.onSortChange?.(next)
 	}
@@ -212,22 +273,11 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		props.onVisibleColumnsChange?.(ordered)
 	}
 
-	function toggleColumn(key: string, checked: boolean): void {
-		const current = new Set(visibleKeys())
-		if (checked) {
-			current.add(key)
-		} else {
-			current.delete(key)
-		}
+	function changeVisibility(updater: Updater<ColumnVisibilityState>): void {
+		const next = functionalUpdate(updater, columnVisibility())
 		// Keep keys for unknown/removed columns out of the state; non-toggleable
 		// columns stay visible implicitly and are not tracked here.
-		const next = allToggleableKeys().filter((candidate) => current.has(candidate))
-		// Preserve columns order: `allToggleableKeys` already follows it.
-		setVisibleKeys(next)
-	}
-
-	function showAllColumns(): void {
-		setVisibleKeys(allToggleableKeys())
+		setVisibleKeys(allToggleableKeys().filter((key) => next[key]))
 	}
 
 	function setColumnOrder(next: string[]): void {
@@ -237,27 +287,34 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	/** Moves the column with `key` to `index` within the current order. */
 	function moveColumn(key: string, index: number): void {
-		const keys = orderedColumns().map((column) => column.key)
+		const keys = table.getAllLeafColumns().map((column) => column.id)
 		const from = keys.indexOf(key)
 		if (from === -1 || index < 0 || index >= keys.length || index === from) return
 		keys.splice(from, 1)
 		keys.splice(index, 0, key)
-		setColumnOrder(keys)
+		table.setColumnOrder(keys)
 	}
 
 	function resetColumns(): void {
 		setVisibleKeys(defaultVisibleKeys())
-		setColumnOrder(columnsInOrder(props.defaultColumnOrder ?? []).map((column) => column.key))
+		const keys = props.columns.map((column) => column.key)
+		const known = (props.defaultColumnOrder ?? []).filter((key) => keys.includes(key))
+		setColumnOrder([...new Set([...known, ...keys])])
 	}
 
-	const MIN_COLUMN_WIDTH = 40
-	const [widths, setWidths] = createSignal<Record<string, number>>({})
-	const [tableWidth, setTableWidth] = createSignal<number | undefined>()
+	// Pixel widths once resized; until then the browser lays out the columns.
+	const widths = () => table.atoms.columnSizing.get()
+	/** Width of what isn't a data column (actions); set once the table is resized. */
+	const [extraWidth, setExtraWidth] = createSignal<number | undefined>()
+	const tableWidth = () => {
+		const extra = extraWidth()
+		return extra === undefined ? undefined : table.getTotalSize() + extra
+	}
 	let tableRef: HTMLTableElement | undefined
 
 	createEffect(() => {
 		const keys = visibleColumns().map((column) => column.key)
-		if (!tableRef || untrack(tableWidth) === undefined) return
+		if (!tableRef || untrack(extraWidth) === undefined) return
 		const current = untrack(widths)
 		if (keys.every((key) => current[key] !== undefined)) return
 		const next = { ...current }
@@ -274,13 +331,23 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 			}
 			next[key] = Math.max(MIN_COLUMN_WIDTH, Math.ceil(fit))
 		}
-		setWidths(next)
-		const extra = [...tableRef.querySelectorAll<HTMLElement>('thead th:not([data-column-key])')]
-		setTableWidth(
-			keys.reduce((sum, key) => sum + (next[key] ?? 0), 0) +
-				extra.reduce((sum, th) => sum + th.getBoundingClientRect().width, 0),
-		)
+		table.setColumnSizing(next)
 	})
+
+	/** Current rendered widths, which resizing pins so other columns don't shift. */
+	function measureWidths(el: HTMLTableElement): { sizing: ColumnSizingState; extra: number } {
+		const sizing: ColumnSizingState = {}
+		for (const th of el.querySelectorAll<HTMLElement>('th[data-column-key]')) {
+			sizing[th.dataset.columnKey as string] = th.getBoundingClientRect().width
+		}
+		const total = Object.values(sizing).reduce((sum, width) => sum + width, 0)
+		return { sizing, extra: el.getBoundingClientRect().width - total }
+	}
+
+	function applyWidths(sizing: ColumnSizingState, extra: number): void {
+		table.setColumnSizing(sizing)
+		setExtraWidth(extra)
+	}
 
 	function startResize(event: PointerEvent, key: string): void {
 		if (!tableRef) return
@@ -289,20 +356,15 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		const handle = event.currentTarget as HTMLElement
 		handle.setPointerCapture(event.pointerId)
 		const startX = event.clientX
-		const startTable = tableRef.getBoundingClientRect().width
-		const frozen: Record<string, number> = {}
-		for (const th of tableRef.querySelectorAll<HTMLElement>('th[data-column-key]')) {
-			frozen[th.dataset.columnKey as string] = th.getBoundingClientRect().width
-		}
-		const startWidth = frozen[key] ?? MIN_COLUMN_WIDTH
+		const { sizing, extra } = measureWidths(tableRef)
+		const startWidth = sizing[key] ?? MIN_COLUMN_WIDTH
 		let moved = false
 
 		function onMove(e: PointerEvent): void {
 			if (!moved && Math.abs(e.clientX - startX) < 2) return
 			moved = true
 			const next = Math.max(MIN_COLUMN_WIDTH, startWidth + e.clientX - startX)
-			setWidths({ ...frozen, [key]: next })
-			setTableWidth(startTable + next - startWidth)
+			applyWidths({ ...sizing, [key]: next }, extra)
 		}
 		function onUp(): void {
 			handle.removeEventListener('pointermove', onMove)
@@ -319,14 +381,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		const step = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0
 		if (!step || !tableRef) return
 		event.preventDefault()
-		const frozen: Record<string, number> = {}
-		for (const th of tableRef.querySelectorAll<HTMLElement>('th[data-column-key]')) {
-			frozen[th.dataset.columnKey as string] = th.getBoundingClientRect().width
-		}
-		const current = frozen[key] ?? MIN_COLUMN_WIDTH
-		const next = Math.max(MIN_COLUMN_WIDTH, current + step)
-		setTableWidth(tableRef.getBoundingClientRect().width + next - current)
-		setWidths({ ...frozen, [key]: next })
+		const { sizing, extra } = measureWidths(tableRef)
+		const current = sizing[key] ?? MIN_COLUMN_WIDTH
+		applyWidths({ ...sizing, [key]: Math.max(MIN_COLUMN_WIDTH, current + step) }, extra)
 		props.onColumnWidthsChange?.(widths())
 	}
 
@@ -354,10 +411,6 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 			document.removeEventListener('keydown', onKeyDown)
 		})
 	})
-
-	function isColumnVisible(column: DataTableColumn<TRow>): boolean {
-		return column.toggleable === false || visibleSet().has(column.key)
-	}
 
 	function cell(row: TRow, column: DataTableColumn<TRow>): JSX.Element {
 		return props.getCell?.(row, column) ?? column.getValue?.(row) ?? null
@@ -405,9 +458,11 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				<label class="data-table-customizer-option">
 					<input
 						type="checkbox"
-						checked={isColumnVisible(column)}
+						checked={columnVisibility()[column.key]}
 						disabled={column.toggleable === false}
-						onChange={(e) => toggleColumn(column.key, e.currentTarget.checked)}
+						onChange={(e) =>
+							table.getColumn(column.key)?.toggleVisibility(e.currentTarget.checked)
+						}
 					/>
 					{column.ariaLabel ?? column.label}
 				</label>
@@ -432,7 +487,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					</For>
 				</ul>
 				<div class="data-table-customizer-actions">
-					<button type="button" onClick={showAllColumns}>
+					<button type="button" onClick={() => table.toggleAllColumnsVisible(true)}>
 						{props.columnCustomizerShowAllLabel ?? 'Show all'}
 					</button>
 					<button type="button" onClick={resetColumns}>
@@ -473,7 +528,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					<button
 						type="button"
 						class="data-table-sort"
-						onClick={() => changeSort(column.key)}
+						onClick={() => table.getColumn(column.key)?.toggleSorting()}
 					>
 						{column.label}
 						<span class="data-table-sort-indicator" aria-hidden="true">

@@ -196,3 +196,82 @@ test('saving is disabled without savedFilters', () => {
 	expect(container.querySelector('.filter-table-pill-save')).toBeNull()
 	expect(container.querySelector('input[aria-label="Saved filters"]')).toBeNull()
 })
+
+test('quick search spans the joined column values', () => {
+	const container = mount()
+	const search = container.querySelector<HTMLInputElement>('input[type="search"]')
+	if (!search) throw new Error('No quick search')
+
+	type(search, 'LAMP light')
+	expect(names(container)).toEqual(['Lamp'])
+})
+
+test('filters apply to new rows and sort survives filtering', () => {
+	const [items, setItems] = createSignal(rows)
+	const sortable = columns.map((column) => ({ ...column, sortable: true }))
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={items}
+				columns={sortable}
+				filters={filters}
+				getRowId={(row) => row.id}
+				defaultFilterValues={{ category: ['Lighting'] }}
+				defaultSort={{ key: 'name', direction: 'desc' }}
+			/>
+		),
+		container,
+	)
+	expect(names(container)).toEqual(['Spotlight', 'Lamp'])
+
+	setItems([...rows, { id: 5, name: 'Torch', category: 'Lighting', stock: 1 }])
+	expect(names(container)).toEqual(['Torch', 'Spotlight', 'Lamp'])
+	expect(tab(container, 'Results').textContent).toBe('Results3')
+})
+
+test('manual filtering passes rows through', () => {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+				defaultFilterValues={{ name: 'lamp' }}
+				manualFiltering
+			/>
+		),
+		container,
+	)
+	expect(names(container)).toHaveLength(4)
+})
+
+test('custom match replaces the built-in matching', () => {
+	const custom: FilterTableFilter<Row>[] = [
+		{
+			key: 'low',
+			label: 'Low',
+			type: 'text',
+			match: (row, value) => row.stock < Number(value),
+		},
+	]
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={custom}
+				getRowId={(row) => row.id}
+				defaultFilterValues={{ low: '1' }}
+			/>
+		),
+		container,
+	)
+	expect(names(container)).toEqual(['Planter', 'Spotlight'])
+})

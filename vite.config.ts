@@ -4,6 +4,8 @@ import { tablerIcons } from './src/vite.ts'
 
 export default defineConfig(({ mode }) => ({
 	plugins: [tablerIcons(), solidPlugin()],
+	// TanStack's debug checks must not reach apps without a `process` global.
+	define: { 'process.env.NODE_ENV': JSON.stringify(mode) },
 	build: {
 		lib: {
 			entry: './src/index.ts',

@@ -1,4 +1,15 @@
 import { IconDeviceFloppy, IconSearch, IconX } from '@tabler/icons-solidjs'
+import {
+	type ColumnDef,
+	type ColumnFiltersState,
+	columnFilteringFeature,
+	createFilteredRowModel,
+	createTable,
+	filterFn_includesString,
+	globalFilteringFeature,
+	type RowData,
+	tableFeatures,
+} from '@tanstack/solid-table'
 import type { Accessor, JSX } from 'solid-js'
 import {
 	createEffect,
@@ -81,6 +92,14 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 }
 
 const QUICK_SEARCH_KEY = 'q'
+/** Table column holding each row's search text, which is what the quick search filters. */
+const SEARCH_COLUMN = '__search__'
+
+const features = tableFeatures({
+	columnFilteringFeature,
+	globalFilteringFeature,
+	filteredRowModel: createFilteredRowModel(),
+})
 
 function read<T>(value: T | Accessor<T>): T {
 	return typeof value === 'function' ? (value as Accessor<T>)() : value
@@ -198,16 +217,46 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			.join(' ')
 	}
 
-	const filteredRows = createMemo(() => {
-		if (local.manualFiltering) return rows()
-		const needle = quickSearch().toLowerCase()
-		const applied = appliedFilters()
-		return rows().filter(
-			(row) =>
-				(needle === '' || searchText(row).toLowerCase().includes(needle)) &&
-				applied.every((filter) => matches(row, filter, values()[filter.key])),
-		)
+	const columnFilters = createMemo<ColumnFiltersState>(() =>
+		appliedFilters().map((filter) => ({ id: filter.key, value: values()[filter.key] })),
+	)
+	// Public row types stay unconstrained; TanStack only requires object rows.
+	type TableRow = TRow & RowData
+	const columnDefs = createMemo(() => {
+		const columns: ColumnDef<typeof features, TableRow>[] = local.filters.map((filter) => ({
+			id: filter.key,
+			accessorFn: (row) => filterValue(row, filter),
+			filterFn: (row, _id, value) => matches(row.original, filter, value),
+		}))
+		columns.push({ id: SEARCH_COLUMN, accessorFn: searchText })
+		return columns
 	})
+
+	const table = createTable<typeof features, TableRow>({
+		features,
+		get data() {
+			return rows() as TableRow[]
+		},
+		get columns() {
+			return columnDefs()
+		},
+		getRowId: (row) => String(tableProps.getRowId(row)),
+		get manualFiltering() {
+			return local.manualFiltering
+		},
+		globalFilterFn: filterFn_includesString,
+		getColumnCanGlobalFilter: (column) => column.id === SEARCH_COLUMN,
+		state: {
+			get columnFilters() {
+				return columnFilters()
+			},
+			get globalFilter() {
+				return quickSearch()
+			},
+		},
+	})
+
+	const filteredRows = createMemo(() => table.getRowModel().rows.map((row) => row.original))
 
 	function options(filter: FilterTableFilter<TRow>): ComboboxOption[] {
 		if (filter.options) return filter.options

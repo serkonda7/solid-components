@@ -222,12 +222,20 @@ plugins: [tablerIcons(), solid()] // before solid()
 - Co-locate styles in `src/`; `scripts/build.ts` copies `src/styles.css` to `dist/`.
   Never edit `dist/` by hand.
 - Add a demo to `examples/App.tsx`.
-- No new runtime deps; use SolidJS (a peer dep, `external` in `vite.config.ts`) and
-  `@tabler/icons-solidjs` for icons (a dev dep, bundled into `dist/` so only
-  the used icons ship).
+- No new runtime deps; use SolidJS (a peer dep, `external` in `vite.config.ts`),
+  `@tabler/icons-solidjs` for icons, and `@tanstack/solid-table` for table logic
+  (dev deps, bundled into `dist/` so only what's used ships).
 
 ## DataTable invariants (`src/data-table.tsx`)
-- Reactive props accept `T | Accessor<T>`; unwrap via `read()` (`src/data-table.tsx:63`).
+- TanStack Table owns the row model and the sorting, visibility, order, and sizing
+  logic. Its state is derived from the public props and signals; `on*Change`
+  handlers map it back to the public callbacks. No TanStack type is public API.
+- Sorting, visibility, and order are controlled table state, so read `table.atoms`
+  or those memos, not TanStack's defaults. Sizing is the table's own state and is
+  empty until the first resize, because `width` props may be CSS lengths.
+- The resize gesture is custom (pointer capture, a drag threshold, keyboard) rather
+  than `columnResizingFeature`, which has no keyboard path and pins on mousedown.
+- Reactive props accept `T | Accessor<T>`; unwrap via `read()`.
   Do not call the prop directly.
 - Cell precedence: `getCell` → `column.getValue` → `null`.
 - Sort buttons render for `column.sortable` columns; in controlled mode (`sortKey`
@@ -249,6 +257,11 @@ plugins: [tablerIcons(), solid()] // before solid()
   `createEffect`; keep both listeners paired.
 
 ## FilterTable invariants (`src/filter-table.tsx`)
+- Filtering runs in a headless TanStack table with one column per filter, plus a
+  search column that the global filter targets so the quick search matches the
+  joined search text. `DataTable` receives the resulting rows.
+- `match` and `getSearchText` run inside TanStack's memoized row models, so signals
+  they read don't re-filter; reactive inputs belong in `rows` or `filterValues`.
 - The quick search lives under the reserved key `q`; do not use it as a filter key.
 - Values are normalized (trimmed, empty strings/arrays dropped) before they are
   stored or emitted.

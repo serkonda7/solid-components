@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, expect, test } from 'vitest'
-import { DataTable, type DataTableColumn, type DataTableProps } from '.'
+import { DataTable, type DataTableColumn, type DataTableProps, type DataTableSort } from '.'
 import './styles.css'
 
 type Row = { id: number; name: string; price: number }
@@ -176,4 +176,126 @@ test('re-showing a hidden column in a resized table fits it to its content', asy
 
 	const idHeader = container.querySelector<HTMLElement>('th[data-column-key="id"]')
 	expect(idHeader?.getBoundingClientRect().width).toBeGreaterThanOrEqual(40)
+})
+
+test('new rows and columns update the table', () => {
+	const [items, setItems] = createSignal(rows)
+	const [cols, setCols] = createSignal(columns)
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<DataTable
+				rows={items}
+				columns={cols()}
+				getRowId={(row) => row.id}
+				defaultSort={{ key: 'price', direction: 'desc' }}
+			/>
+		),
+		container,
+	)
+	expect(columnText(container, 0)).toEqual(['A', 'B', 'C'])
+
+	const added = { id: 4, name: 'D', price: 5 }
+	const first = container.querySelector('tbody tr')
+	setItems([...rows, added])
+	expect(columnText(container, 0)).toEqual(['A', 'D', 'B', 'C'])
+	// Rows are keyed by the consumer's objects, so existing ones keep their DOM.
+	expect(container.querySelector('tbody tr')).toBe(first)
+
+	setCols([...columns].reverse())
+	expect(headers(container)).toEqual(['ID', 'Price▼', 'Name'])
+	expect(columnText(container, 2)).toEqual(['A', 'D', 'B', 'C'])
+})
+
+test('controlled sort only reports the next state', () => {
+	const sorts: unknown[] = []
+	const keys: string[] = []
+	let clears = 0
+	const [sort, setSort] = createSignal<DataTableSort | undefined>({
+		key: 'name',
+		direction: 'desc',
+	})
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<DataTable
+				rows={rows}
+				columns={columns}
+				getRowId={(row) => row.id}
+				sortKey={() => sort()?.key}
+				sortDirection={() => sort()?.direction ?? 'asc'}
+				onSort={(key) => keys.push(key)}
+				onSortClear={() => clears++}
+				onSortChange={(next) => {
+					sorts.push(next)
+					setSort(next)
+				}}
+			/>
+		),
+		container,
+	)
+	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
+
+	sortButton(container, 'Name').click()
+	sortButton(container, 'Price').click()
+	expect(sorts).toEqual([undefined, { key: 'price', direction: 'asc' }])
+	expect(keys).toEqual(['name', 'price'])
+	expect(clears).toBe(1)
+	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
+})
+
+test('column visibility can be toggled and shown again', () => {
+	const changes: string[][] = []
+	const container = mountCustomizer({
+		columns: [...columns.slice(0, 2), { ...columns[2], key: 'id', toggleable: false }],
+		onVisibleColumnsChange: (keys) => changes.push(keys),
+	})
+	const boxes = container.querySelectorAll<HTMLInputElement>('.data-table-customizer-item input')
+	expect(boxes[2]?.disabled).toBe(true)
+
+	boxes[0]?.click()
+	expect(headers(container)).toEqual(['Price', 'ID'])
+
+	container
+		.querySelectorAll<HTMLButtonElement>('.data-table-customizer-actions button')[0]
+		?.click()
+	expect(headers(container)).toEqual(['Name', 'Price', 'ID'])
+	expect(changes).toEqual([['price'], ['name', 'price']])
+})
+
+test('resizing by keyboard pins widths and reports them', () => {
+	const changes: Record<string, number>[] = []
+	const container = document.createElement('div')
+	container.style.width = '600px'
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<DataTable
+				rows={rows}
+				columns={columns}
+				getRowId={(row) => row.id}
+				rowActions={() => <button type="button">Edit</button>}
+				resizableColumns
+				onColumnWidthsChange={(widths) => changes.push(widths)}
+			/>
+		),
+		container,
+	)
+	const table = container.querySelector('table') as HTMLElement
+	const before = columnWidths(container)
+	const tableBefore = table.getBoundingClientRect().width
+
+	container
+		.querySelector('.data-table-resize-handle')
+		?.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }),
+		)
+
+	const after = columnWidths(container)
+	expect(after[0]).toBeCloseTo((before[0] ?? 0) + 10, 0)
+	expect(after[1]).toBeCloseTo(before[1] ?? 0, 0)
+	expect(table.getBoundingClientRect().width).toBeCloseTo(tableBefore + 10, 0)
+	expect(Object.keys(changes[0] ?? {})).toEqual(['name', 'price', 'id'])
 })
