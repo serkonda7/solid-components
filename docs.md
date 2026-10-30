@@ -163,6 +163,38 @@ global shortcut hint:
   `clearLabel` (default `Clear search`).
 - `class` is added to the wrapper (`.search-bar`), e.g. to cap its width.
 
+## Modal usage
+
+Controlled modal dialog built on a native `<dialog>` (`showModal()`). Its
+content is mounted only while `open`:
+
+```tsx
+<Modal
+  open={editing()}
+  onClose={() => setEditing(false)}
+  title="Edit device"
+  footer={<button type="button" onClick={save}>Save</button>}
+>
+  <input aria-label="Name" autofocus />
+</Modal>
+```
+
+- Focus: the modal sits in the top layer and the page behind is inert, so focus
+  can't leave it. Opening focuses the first `autofocus` element, else the first
+  focusable one (the close button); closing returns focus to the element that
+  had it before.
+- Closing: Escape, a click on the backdrop (only when the press also started
+  there, so dragging a selection out of the panel doesn't close) and the header
+  close button call `onClose`; the modal itself only closes through `open`.
+  Disable them with `closeOnEscape={false}`, `closeOnBackdrop={false}`,
+  `hideCloseButton`. A native close (`<form method="dialog">`) also calls
+  `onClose`. Escape handled inside (e.g. by an open `Combobox`) doesn't reach it.
+- Naming: `title` renders an `<h2>` and labels the dialog; without it pass
+  `ariaLabel`. `describedBy` sets `aria-describedby`. `closeLabel` defaults to
+  `Close`.
+- Page scroll is locked while a modal is open. Width via `--modal-width`
+  (default `32rem`); `class` is added to the `<dialog class="modal">`.
+
 ## Vite plugin (`@serkonda7/solid-components/vite`, `src/vite.ts`)
 
 `tablerIcons()` is for apps that import `@tabler/icons-solidjs` themselves; the

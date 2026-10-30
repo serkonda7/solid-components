@@ -37,6 +37,7 @@ These components are available:
 - `DataTable` - generic table with optional sorting, actions, loading, empty states, and column customizer.
 - `FilterTable` - `DataTable` with filtering: quick search, a grouped filter form, and removable filter pills.
 - `Combobox` - searchable, accessible dropdown with keyboard navigation, option icons and previews, a detail column, and an optional "Add …" entry.
+- `Modal` - controlled modal dialog with focus trapping and restore, a close button, Escape and backdrop-click closing.
 - `SearchBar` - search input with clear button and a global Ctrl/Cmd+K focus shortcut.
 
 For the full API, examples, and agent notes, see [docs.md](docs.md).

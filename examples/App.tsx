@@ -8,6 +8,7 @@ import {
 	FilterTable,
 	type FilterTableSavedFilter,
 	type FilterTableValues,
+	Modal,
 	SearchBar,
 } from '../src'
 import { type Device, deviceColumns, deviceFilters, devices } from './devices'
@@ -107,6 +108,7 @@ const pages = [
 	{ id: 'data-table', label: 'DataTable' },
 	{ id: 'filter-table', label: 'FilterTable' },
 	{ id: 'combobox', label: 'Combobox' },
+	{ id: 'modal', label: 'Modal' },
 	{ id: 'search-bar', label: 'SearchBar' },
 ] as const
 
@@ -127,6 +129,8 @@ export default function App() {
 	const [product, setProduct] = createSignal('')
 	const [added, setAdded] = createSignal<string>()
 	const [search, setSearch] = createSignal('')
+	const [modalOpen, setModalOpen] = createSignal(false)
+	const [modalName, setModalName] = createSignal('Aurora Lamp')
 	const [filterValues, setFilterValues] = createSignal<FilterTableValues>({})
 	const [savedFilters, setSavedFilters] = createSignal<FilterTableSavedFilter[]>(
 		JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY) ?? '[]'),
@@ -293,6 +297,56 @@ export default function App() {
 									· Add requested with name <code>{added() || '(empty)'}</code>
 								</Show>
 							</p>
+						</section>
+					</Match>
+					<Match when={page() === 'modal'}>
+						<h1>Modal example</h1>
+						<p>
+							Close with Escape, a backdrop click, the close button, or the form
+							buttons.
+						</p>
+
+						<section class="modal-demo">
+							<button type="button" onClick={() => setModalOpen(true)}>
+								Rename product
+							</button>
+							<p>
+								Name: <code>{modalName()}</code>
+							</p>
+							<Modal
+								open={modalOpen()}
+								onClose={() => setModalOpen(false)}
+								title="Rename product"
+								footer={
+									<>
+										<button type="button" onClick={() => setModalOpen(false)}>
+											Cancel
+										</button>
+										<button type="submit" form="rename-form">
+											Save
+										</button>
+									</>
+								}
+							>
+								<form
+									id="rename-form"
+									class="modal-demo-form"
+									onSubmit={(e) => {
+										e.preventDefault()
+										const name = new FormData(e.currentTarget).get('name')
+										setModalName(String(name))
+										setModalOpen(false)
+									}}
+								>
+									<label for="rename-input">Name</label>
+									<input
+										id="rename-input"
+										name="name"
+										value={modalName()}
+										autofocus
+									/>
+								</form>
+							</Modal>
 						</section>
 					</Match>
 					<Match when={page() === 'search-bar'}>

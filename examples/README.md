@@ -10,6 +10,7 @@ library exposes `DataTable`, so the demo focuses on its complete API surface:
 - `FilterTable` over a network device inventory (`devices.ts`): quick search,
   a grouped filter form with text, multi-select, and yes/no filters, and filter pills;
 - `Combobox` with icons, a detail column, and an add entry;
+- `Modal` with a form, focus restore, and Escape/backdrop closing;
 - `SearchBar` with the Ctrl/Cmd+K shortcut.
 
 ## Run locally

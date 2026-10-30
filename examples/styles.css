@@ -169,3 +169,12 @@ button:hover {
 		overflow-x: auto;
 	}
 }
+
+.modal-demo {
+	margin-top: 16px;
+}
+
+.modal-demo-form {
+	display: grid;
+	gap: 8px;
+}

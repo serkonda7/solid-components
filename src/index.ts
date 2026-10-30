@@ -28,6 +28,10 @@ export {
 	type FilterTableValues,
 } from './filter-table'
 export {
+	Modal,
+	type ModalProps,
+} from './modal'
+export {
 	SearchBar,
 	type SearchBarProps,
 } from './search-bar'
