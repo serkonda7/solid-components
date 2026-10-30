@@ -223,8 +223,9 @@ plugins: [tablerIcons(), solid()] // before solid()
   Never edit `dist/` by hand.
 - Add a demo to `examples/App.tsx`.
 - No new runtime deps; use SolidJS (a peer dep, `external` in `vite.config.ts`),
-  `@tabler/icons-solidjs` for icons, and `@tanstack/solid-table` for table logic
-  (dev deps, bundled into `dist/` so only what's used ships).
+  `@tabler/icons-solidjs` for icons (a dev dep, bundled into `dist/` so only the
+  used icons ship), and `@tanstack/solid-table` for table logic (a dependency,
+  `external` so apps using it directly share one copy).
 
 ## DataTable invariants (`src/data-table.tsx`)
 - TanStack Table owns the row model and the sorting, visibility, order, and sizing
