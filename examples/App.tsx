@@ -197,10 +197,30 @@ export default function App() {
 	const [search, setSearch] = createSignal('')
 	const [modalOpen, setModalOpen] = createSignal(false)
 	const [modalName, setModalName] = createSignal('Aurora Lamp')
+	const [modalDirty, setModalDirty] = createSignal(false)
+	const [discardOpen, setDiscardOpen] = createSignal(false)
 	const [filterValues, setFilterValues] = createSignal<FilterTableValues>({})
 	const [savedFilters, setSavedFilters] = createSignal<FilterTableSavedFilter[]>(
 		JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY) ?? '[]'),
 	)
+
+	let answerDiscard: (discard: boolean) => void = () => {}
+
+	function confirmDiscard(): boolean | Promise<boolean> {
+		if (!modalDirty()) return true
+		setDiscardOpen(true)
+		return new Promise((resolve) => {
+			answerDiscard = (discard) => {
+				setDiscardOpen(false)
+				resolve(discard)
+			}
+		})
+	}
+
+	function closeRename(): void {
+		setModalOpen(false)
+		setModalDirty(false)
+	}
 
 	function saveFilters(next: FilterTableSavedFilter[]): void {
 		localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next))
@@ -390,7 +410,7 @@ export default function App() {
 						<h1>Modal example</h1>
 						<p>
 							Close with Escape, a backdrop click, the close button, or the form
-							buttons.
+							buttons. With unsaved changes, <code>onBeforeClose</code> asks first.
 						</p>
 
 						<section class="modal-demo">
@@ -402,11 +422,18 @@ export default function App() {
 							</p>
 							<Modal
 								open={modalOpen()}
-								onClose={() => setModalOpen(false)}
+								onBeforeClose={confirmDiscard}
+								onClose={closeRename}
 								title="Rename product"
 								footer={
 									<>
-										<button type="button" onClick={() => setModalOpen(false)}>
+										<button
+											type="button"
+											onClick={async () => {
+												// Skips onBeforeClose when closed directly, so ask here too.
+												if (await confirmDiscard()) closeRename()
+											}}
+										>
 											Cancel
 										</button>
 										<button type="submit" form="rename-form">
@@ -422,7 +449,7 @@ export default function App() {
 										e.preventDefault()
 										const name = new FormData(e.currentTarget).get('name')
 										setModalName(String(name))
-										setModalOpen(false)
+										closeRename()
 									}}
 								>
 									<label for="rename-input">Name</label>
@@ -431,8 +458,29 @@ export default function App() {
 										name="name"
 										value={modalName()}
 										autofocus
+										onInput={(e) => {
+											setModalDirty(e.currentTarget.value !== modalName())
+										}}
 									/>
 								</form>
+							</Modal>
+							<Modal
+								open={discardOpen()}
+								onClose={() => answerDiscard(false)}
+								title="Discard changes?"
+								hideCloseButton
+								footer={
+									<>
+										<button type="button" onClick={() => answerDiscard(false)}>
+											Keep editing
+										</button>
+										<button type="button" onClick={() => answerDiscard(true)}>
+											Discard
+										</button>
+									</>
+								}
+							>
+								Your new name hasn't been saved.
 							</Modal>
 						</section>
 					</Match>

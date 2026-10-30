@@ -7,6 +7,12 @@ export interface ModalProps {
 	open: boolean
 	/** Called on Escape, a backdrop click or the close button; set `open` to false here. */
 	onClose: () => void
+	/**
+	 * Called before Escape, a backdrop click or the close button call `onClose`;
+	 * return `false` (or resolve to it) to keep the modal open. Further requests
+	 * are ignored while a returned promise is pending.
+	 */
+	onBeforeClose?: () => boolean | Promise<boolean>
 	/** Heading in the modal header; also its accessible name. */
 	title?: JSX.Element
 	/** Accessible name when there is no `title`. */
@@ -49,6 +55,7 @@ function ModalDialog(props: ModalProps): JSX.Element {
 	// selection out of the panel doesn't.
 	let pressedBackdrop = false
 	let closing = false
+	let confirming = false
 
 	onMount(() => {
 		if (!dialog) return
@@ -63,13 +70,30 @@ function ModalDialog(props: ModalProps): JSX.Element {
 		})
 	})
 
+	function requestClose(): void {
+		if (confirming) return
+		const allowed = props.onBeforeClose?.()
+		if (allowed instanceof Promise) {
+			confirming = true
+			allowed
+				.then((ok) => {
+					if (ok !== false && !closing) props.onClose()
+				})
+				.finally(() => {
+					confirming = false
+				})
+		} else if (allowed !== false) {
+			props.onClose()
+		}
+	}
+
 	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key !== 'Escape') return
 		// Also suppresses the native cancel, so the dialog only closes through `open`.
 		e.preventDefault()
 		e.stopPropagation()
 		if (props.closeOnEscape !== false) {
-			props.onClose()
+			requestClose()
 		}
 	}
 
@@ -85,10 +109,10 @@ function ModalDialog(props: ModalProps): JSX.Element {
 			onCancel={(e) => {
 				e.preventDefault()
 				if (props.closeOnEscape !== false) {
-					props.onClose()
+					requestClose()
 				}
 			}}
-			// Closed natively anyway (e.g. `<form method="dialog">`): report it.
+			// Closed natively anyway (e.g. `<form method="dialog">`): too late to veto, report it.
 			onClose={() => {
 				if (!closing) props.onClose()
 			}}
@@ -98,7 +122,7 @@ function ModalDialog(props: ModalProps): JSX.Element {
 			onClick={(e) => {
 				// The dialog has no padding, so only backdrop clicks target it directly.
 				if (pressedBackdrop && e.target === dialog && props.closeOnBackdrop !== false) {
-					props.onClose()
+					requestClose()
 				}
 				pressedBackdrop = false
 			}}
@@ -116,7 +140,7 @@ function ModalDialog(props: ModalProps): JSX.Element {
 								type="button"
 								class="modal-close"
 								aria-label={props.closeLabel ?? 'Close'}
-								onClick={() => props.onClose()}
+								onClick={requestClose}
 							>
 								<IconX size={18} aria-hidden="true" />
 							</button>

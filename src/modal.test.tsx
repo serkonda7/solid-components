@@ -204,3 +204,74 @@ test('a native close (form method=dialog) reports onClose', async () => {
 	await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
 	expect(document.querySelector('dialog')).toBeNull()
 })
+
+test('onBeforeClose can veto every close trigger', () => {
+	const onBeforeClose = vi.fn(() => false)
+	const { opener, onClose } = mount({ title: 'Edit', onBeforeClose })
+	const el = openFrom(opener)
+	pressEscape(el)
+	el.dispatchEvent(new Event('cancel', { cancelable: true }))
+	pointer(el, 'pointerdown')
+	pointer(el, 'click')
+	el.querySelector<HTMLButtonElement>('.modal-close')?.click()
+	expect(onBeforeClose).toHaveBeenCalledTimes(4)
+	expect(onClose).not.toHaveBeenCalled()
+	expect(el.open).toBe(true)
+})
+
+test('onBeforeClose returning true closes synchronously', () => {
+	const { opener, onClose, dialog } = mount({ title: 'Edit', onBeforeClose: () => true })
+	pressEscape(openFrom(opener))
+	expect(onClose).toHaveBeenCalledTimes(1)
+	expect(dialog()).toBeNull()
+})
+
+test('onBeforeClose is skipped by disabled triggers', () => {
+	const onBeforeClose = vi.fn(() => true)
+	const { opener } = mount({ title: 'Edit', onBeforeClose, closeOnEscape: false })
+	pressEscape(openFrom(opener))
+	expect(onBeforeClose).not.toHaveBeenCalled()
+})
+
+test('a pending onBeforeClose ignores further requests, then decides', async () => {
+	const answers: ((ok: boolean) => void)[] = []
+	const onBeforeClose = vi.fn(() => new Promise<boolean>((resolve) => answers.push(resolve)))
+	const { opener, onClose, dialog } = mount({ title: 'Edit', onBeforeClose })
+	const el = openFrom(opener)
+
+	pressEscape(el)
+	pressEscape(el)
+	expect(onBeforeClose).toHaveBeenCalledTimes(1)
+	answers[0]?.(false)
+	await vi.waitFor(() => {
+		pressEscape(el)
+		expect(onBeforeClose).toHaveBeenCalledTimes(2)
+	})
+	expect(onClose).not.toHaveBeenCalled()
+
+	answers[1]?.(true)
+	await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+	expect(dialog()).toBeNull()
+})
+
+test('a pending onBeforeClose does not call onClose after the modal closed', async () => {
+	let answer: (ok: boolean) => void = () => {}
+	const { opener, setOpen, onClose } = mount({
+		title: 'Edit',
+		onBeforeClose: () => new Promise((resolve) => (answer = resolve)),
+	})
+	pressEscape(openFrom(opener))
+	setOpen(false)
+	answer(true)
+	await Promise.resolve()
+	await Promise.resolve()
+	expect(onClose).not.toHaveBeenCalled()
+})
+
+test('a native close skips onBeforeClose', async () => {
+	const onBeforeClose = vi.fn(() => false)
+	const { opener, onClose } = mount({ title: 'Edit', onBeforeClose })
+	openFrom(opener).close()
+	await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+	expect(onBeforeClose).not.toHaveBeenCalled()
+})

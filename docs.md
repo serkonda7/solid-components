@@ -1,13 +1,12 @@
-# Agent Docs — solid-components
+# solid-components docs
 
-Start with `README.md` (minimal usage), `examples/App.tsx` + `examples/README.md`
-(demo), `package.json` (scripts), `.github/workflows/ci.yml` (gates). This file
-covers the full API plus what those omit.
+Full API and internals. Install and component list: `README.md`. Live usage of
+every feature: `examples/App.tsx`.
 
-## DataTable usage
+## DataTable
 
-See `README.md` for the component list. `DataTable` does not fetch data or perform
-navigation. Consumers provide the rows, cell rendering, and callbacks:
+Doesn't fetch or navigate; the consumer provides rows and callbacks. Reactive
+props accept `T | Accessor<T>`. Cell content: `getCell` → `column.getValue` → `null`.
 
 ```tsx
 <DataTable
@@ -19,87 +18,56 @@ navigation. Consumers provide the rows, cell rendering, and callbacks:
 />
 ```
 
-### Sorting
-Mark columns with `sortable: true`. Clicking a header cycles `asc` → `desc` →
-unsorted; clicking another header starts it at `asc`.
+No built-in row selection: render checkboxes in `getCell`, keep ids in the consumer.
 
-- Uncontrolled by default: the table sorts `rows` itself. Set the initial state
-  with `defaultSort`. Values come from `column.sortValue(row)`, falling back to
-  `row[column.key]`; numbers compare numerically, everything else via
-  `localeCompare` with `numeric: true`, `null`/`undefined` first.
-- Controlled when `sortKey` or `sortDirection` is passed: the table only renders
-  the sort state and passes `rows` through unchanged, so the consumer must sort
-  them. Handle clicks with `onSort(key)` (fires on every click; the consumer
-  cycles) or `onSortChange(sort | undefined)` (receives the next state).
-- `onSortClear` additionally fires when the cycle reaches unsorted. All sort
-  callbacks also fire in uncontrolled mode.
-- Sorting never changes column widths: the arrow slot has a fixed width. Unsorted
-  sortable headers show a muted `↕` in it, drawn by CSS.
+### Sorting
+`sortable: true` headers cycle `asc` → `desc` → unsorted.
+
+- Uncontrolled: the table sorts `rows`, starting from `defaultSort`. Values come
+  from `column.sortValue(row)`, else `row[column.key]`; numbers compare
+  numerically, the rest via `localeCompare` with `numeric: true`,
+  `null`/`undefined` first.
+- Controlled (`sortKey` or `sortDirection` set): the consumer sorts `rows`.
+  Sort buttons need `onSort(key)` (consumer cycles) or `onSortChange(sort | undefined)`.
+- `onSortClear` fires on reaching unsorted. All callbacks also fire uncontrolled.
 
 ### Column customizer
-Opt in with `showColumnCustomizer`. The table renders a "Columns" button with a
-dialog listing every column as a checkbox, in display order. Columns are
-reordered by dragging an item (with touch or a pen: by its grip) or with
-Alt+ArrowUp/Down on a focused item:
+`showColumnCustomizer` adds a "Columns" dialog: checkboxes, plus reordering by
+drag or Alt+ArrowUp/Down.
 
-```tsx
-const columns = [
-  { key: 'name', label: 'Name', toggleable: false }, // always shown
-  { key: 'price', label: 'Price', defaultVisible: false }, // hidden initially
-]
-
-<DataTable rows={items} getRowId={(item) => item.id} columns={columns} showColumnCustomizer />
-```
-
-- Uncontrolled by default; use `defaultVisibleColumns` for the initial state.
-- Controlled with `visibleColumns` + `onVisibleColumnsChange` to persist the
-  selection
-- Order is uncontrolled by default; use `defaultColumnOrder` (column keys) for the
-  initial order. Controlled with `columnOrder` + `onColumnOrderChange`. Columns
-  missing from the order are appended in `columns` order; unknown keys are ignored.
-- `Show all` restores all columns; `Reset` restores the default visibility and
-  order and clears the column widths.
-- Labels can be customized via `columnCustomizerLabel`, `columnCustomizerTitle`,
-  `columnCustomizerShowAllLabel`, and `columnCustomizerResetLabel`.
-- `FilterTable` passes all of these through to its `DataTable`.
+- Per column: `toggleable: false` (always shown), `defaultVisible: false`.
+- Visibility: `defaultVisibleColumns`, or controlled with `visibleColumns` +
+  `onVisibleColumnsChange`.
+- Order: `defaultColumnOrder`, or controlled with `columnOrder` +
+  `onColumnOrderChange`. Missing columns are appended; unknown keys ignored.
+- `Reset` restores default visibility and order and clears widths.
+- Labels: `columnCustomizerLabel`, `columnCustomizerTitle`,
+  `columnCustomizerShowAllLabel`, `columnCustomizerResetLabel`.
 
 ### Column widths
-`resizableColumns` adds a handle between headers: drag it, use ArrowLeft/Right on
-the focused handle, or double-click it (or press Enter) to fit the column to its
-content.
+`resizableColumns` adds handles: drag, ArrowLeft/Right, or double-click/Enter to
+fit content.
 
-- Persist with `onColumnWidthsChange`, which receives the pixel widths of all
-  visible columns after each resize and `{}` on `Reset`. It doesn't fire during a
-  drag.
-- Restore with `columnWidths`. It can arrive after mount (e.g. from a backend);
-  each new value replaces the current widths and `{}` returns to automatic layout.
-  It is a restore input, not strict control: resizing works without passing the
-  result back. Columns without a saved width are fitted to their content; unknown
-  keys are ignored.
-- Saved widths apply as they are, without the `minWidth`/`maxWidth` of the column.
+- `onColumnWidthsChange` receives pixel widths of all visible columns after each
+  resize (not during a drag) and `{}` on `Reset`.
+- `columnWidths` restores, and may arrive after mount: each new value replaces the
+  widths, `{}` returns to automatic layout. Not strict control: resizing works
+  without passing the result back. Columns without a width are fitted to content.
+- Saved widths ignore the column's `minWidth`/`maxWidth`.
 
-### Long tables
-- `stickyHeader` pins the header. Pinning needs a vertical scroll container
-  because `.data-table-scroll` also scrolls sideways, so the table scrolls inside
-  a viewport capped by `--data-table-max-height` (default `80dvh`).
-- `stickyActions` pins the `rowActions` column to the right edge.
-- Hovered rows get `--data-table-row-hover-bg`. Keep it opaque with `stickyActions`.
-- Sticky cells are opaque: match your surface with `--data-table-bg` (actions) and
-  `--data-table-header-bg` (header).
-
-### Loading
-While `loading` with no rows, the table shows `skeletonRows` (default 5) skeleton
-rows and a visually hidden `Loading…` status. With rows it keeps them and shows
-the visible status below, for refetches. `loadingContent` replaces both. The
-table sets `aria-busy` while loading.
+### Sticky, loading
+- `stickyHeader` scrolls the table inside a viewport capped by
+  `--data-table-max-height` (default `80dvh`).
+- `stickyActions` pins the `rowActions` column right.
+- Sticky cells are opaque: set `--data-table-bg` and `--data-table-header-bg` to
+  your surface, and keep `--data-table-row-hover-bg` opaque with `stickyActions`.
+- `loading` without rows shows `skeletonRows` (default 5) skeletons; with rows it
+  keeps them and shows a status below. `loadingContent` replaces both.
 
 ### Pagination
-Server-side only: the table never slices `rows`, so `rows` must hold just the
-current page. `pagination` renders the pager; the consumer fetches the page:
+Server-side only: `rows` holds just the current page.
 
 ```tsx
-const [paging, setPaging] = createSignal({ page: 1, pageSize: 25 })
-
 <DataTable
   rows={pageRows}
   columns={columns}
@@ -113,28 +81,18 @@ const [paging, setPaging] = createSignal({ page: 1, pageSize: 25 })
 />
 ```
 
-- `page` starts at 1 and `rowCount` is the total across all pages.
+- `page` is 1-based; `rowCount` is the total across pages.
 - `onPaginationChange({ page, pageSize })` only reports; update `pagination` in
-  response. Changing the page size reports page 1.
-- Use controlled sorting, or only the current page gets sorted. Going back to page
-  1 after a sort or filter change is up to the consumer, as is moving off a page
-  that no longer exists.
-- With `FilterTable` set `manualFiltering`, since a client-side filter would only
-  see the current page. Its results badge shows `rowCount`.
-- Texts: `paginationLabels` (`navigation`, `previous`, `next`, `pageSize`, and
-  `range(first, last, rowCount)`). `pageSizeOptions` omitted hides the select.
+  response. A page size change reports page 1.
+- Use controlled sorting, or only the current page gets sorted. Resetting the page
+  after a sort or filter change, or when it no longer exists, is up to the consumer.
+- With `FilterTable`, set `manualFiltering`.
+- Omitting `pageSizeOptions` hides the select. Texts: `paginationLabels`
+  (`navigation`, `previous`, `next`, `pageSize`, `range(first, last, rowCount)`).
 
-### Row selection
-There is no built-in selection. Render checkboxes through `getCell` and keep the
-selected ids in the consumer.
+## FilterTable
 
-Full interactive coverage (sort, pagination, custom cells, actions, loading, empty):
-`examples/App.tsx`.
-
-## FilterTable usage
-
-`FilterTable` wraps `DataTable` (all its props pass through) in
-Results/Filters tabs:
+Wraps `DataTable` (all props pass through) in Results/Filters tabs.
 
 ```tsx
 const filters: FilterTableFilter<Device>[] = [
@@ -146,95 +104,70 @@ const filters: FilterTableFilter<Device>[] = [
 <FilterTable rows={devices} columns={columns} filters={filters} getRowId={(d) => d.id} />
 ```
 
-- Results tab: quick search input (filters as you type; `quickSearch={false}`
-  hides it), one removable pill per applied value plus "Clear all", then the
-  table. Its badge shows the result count.
-- Filters tab: a form with one section per `group` (ungrouped first) under a muted
-  heading, separated by thin rules; labels sit in a fixed-width column. Edits stay a draft until "Search" (or Enter) applies them
-  and returns to Results; "Reset" clears all filters but keeps the quick search.
-  Its badge counts the applied filters.
-- Filter types: `text` (case-insensitive substring), `select` (multi-select via
-  `Combobox` + chips; matches any chosen value, row values may be arrays;
-  `options` default to the distinct row values), `boolean` (Any/Yes/No, matched
-  against `Boolean(value)`). Values come from `getValue(row)`, falling back to
-  `row[key]`; `match(row, value)` replaces the built-in matching.
-- Quick search matches `getSearchText(row)`, by default the rows' column values
-  (`sortValue` or `row[column.key]`).
-- State is a `FilterTableValues` record: `{ [filterKey]: string | string[], q }`
-  with inactive filters omitted, so it maps onto URL query params. Uncontrolled
-  by default (`defaultFilterValues`); controlled with `filterValues` +
-  `onFilterValuesChange`. `onFilterValuesChange` also fires when uncontrolled.
-- `manualFiltering` passes `rows` through unchanged, for server-side filtering.
-- Saved filters (modelled on NetBox): pass `savedFilters` (`{ name, values }[]`,
-  even `[]`) with `onSavedFiltersChange`. A "Save" pill after "Clear all" opens
-  an inline name input; saving stores the applied values (quick search included)
-  and replaces an entry of the same name. A "Saved filters" picker beside the
-  quick search applies one (replacing the applied values) and shows the saved
-  filter equal to the applied values, with a clear button that, like "Clear all",
-  clears the filters but keeps the quick search and the saved filter. Persisting
-  the list (localStorage, backend) and deleting entries are up to the consumer.
-- Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`
-  (`Search`), `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
+- Filter types: `text` (case-insensitive substring), `select` (multi-select, matches
+  any value, row values may be arrays, `options` default to distinct row values),
+  `boolean` (against `Boolean(value)`). Values: `getValue(row)`, else `row[key]`.
+  `match(row, value)` replaces the built-in matching.
+- Filter form edits stay a draft until "Search"/Enter. "Reset" keeps the quick search.
+- Quick search matches `getSearchText(row)`, default the column values; hide it
+  with `quickSearch={false}`.
+- State is `FilterTableValues`: `{ [filterKey]: string | string[], q }`, inactive
+  filters omitted, so it maps onto URL params. Use `defaultFilterValues`, or
+  control with `filterValues`. `onFilterValuesChange` always fires.
+- `manualFiltering` passes `rows` through, for server-side filtering.
+- Saved filters: pass `savedFilters` (`{ name, values }[]`, even `[]`) +
+  `onSavedFiltersChange`. Saving replaces an entry of the same name. Persistence
+  and deletion are up to the consumer.
+- Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`,
+  `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
   `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
   `clearSavedFilterLabel`.
 
-## Combobox usage
+## Combobox
 
-Searchable single-select. It renders only the control, so pair it with your own
-`<label for={id}>` (or pass `ariaLabel`):
+Searchable single-select. Renders only the control: pair it with `<label for={id}>`
+or pass `ariaLabel`.
 
 ```tsx
-<label for="site">Site</label>
 <Combobox
   id="site"
   value={siteId()}            // string; '' = nothing / the empty entry
   onChange={setSiteId}        // omit for read-only
   options={sites().map((s) => ({ value: s.id, label: s.name, detail: s.region, icon: IconMapPin }))}
   emptyLabel="None"           // optional leading '' entry
-  onOpen={refetchSites}       // optional, runs on every open
+  onOpen={refetchSites}       // runs on every open
   onAdd={(query) => navigate(`/sites/add?name=${encodeURIComponent(query)}`)}
   addLabel="Add Site"
 />
 ```
 
-- Typing filters by `label` and `detail` (case-insensitive substring). Arrow keys
-  wrap around and include the add entry; Enter picks, Tab picks and lets focus
-  move on (on the add entry it only closes), Escape closes (and stops
-  propagation so enclosing dialogs stay open). Focus never leaves the input; the
-  highlight is exposed via `aria-activedescendant` and kept scrolled into view.
-- `onAdd` pins an add entry at the end of the list and receives the trimmed search text.
-- Texts: `placeholder` (closed and empty, after `emptyLabel`), `searchLabel` (open placeholder, default `Search`), `noMatchesLabel`
-  (default `No matching objects`), `addLabel` (default `Add`).
-- Options with `detail` render in two columns; `icon` is any
-  `Component<{ size?: number }>` (e.g. a tabler icon), also shown in the closed input.
-- `preview` is a `Component` rendered in a panel beside the open list while its
-  option is highlighted (by hover or arrow keys); `aria-hidden`, so the label
-  must still name the option.
-- The current value is mirrored in the input's `data-value` attribute.
+- Typing filters `label` and `detail`. Escape stops propagation, so enclosing
+  dialogs stay open.
+- `onAdd` pins an add entry last and receives the trimmed search text.
+- Option `icon` is any `Component<{ size?: number }>`. `preview` is a `Component`
+  shown beside the list while the option is highlighted; it is `aria-hidden`, so
+  the label must still name the option.
+- Texts: `placeholder`, `searchLabel` (`Search`), `noMatchesLabel`
+  (`No matching objects`), `addLabel` (`Add`).
+- The value is mirrored in the input's `data-value`.
 
-## SearchBar usage
+## SearchBar
 
-Controlled search input with a leading icon, a clear button while filled, and a
-global shortcut hint:
+Controlled search input with a clear button and global Ctrl/Cmd+K focus.
 
 ```tsx
-<SearchBar value={query()} onInput={setQuery} ariaLabel="Search books" placeholder="Search…" />
+<SearchBar value={query()} onInput={setQuery} ariaLabel="Search books" />
 ```
 
-- Ctrl/Cmd+K anywhere on the page focuses and selects the input (`preventDefault`
-  stops the browser's own binding). Change the key with `shortcutKey`; `false`
-  disables the shortcut, the hint and `aria-keyshortcuts`.
-- While empty a `<kbd>` hint (`Ctrl K`, override with `shortcutLabel`) fills the
-  trailing slot; it is hidden on `(pointer: coarse)` devices. While filled the
-  clear button replaces it and calls `onInput('')`.
-- Texts: `ariaLabel` (default `Search`), `placeholder` (default `Search…`),
-  `clearLabel` (default `Clear search`).
-- `class` is added to the wrapper (`.search-bar`), e.g. to cap its width.
+- `shortcutKey` changes the key; `false` disables shortcut and hint.
+  `shortcutLabel` overrides the hint, which is hidden on `(pointer: coarse)`.
+- Texts: `ariaLabel` (`Search`), `placeholder` (`Search…`), `clearLabel`
+  (`Clear search`).
+- `class` is added to `.search-bar`.
 
-## Modal usage
+## Modal
 
-Controlled modal dialog built on a native `<dialog>` (`showModal()`). Its
-content is mounted only while `open`:
+Controlled, on native `<dialog>` (`showModal()`). Content is mounted only while `open`.
 
 ```tsx
 <Modal
@@ -247,130 +180,111 @@ content is mounted only while `open`:
 </Modal>
 ```
 
-- Focus: the modal sits in the top layer and the page behind is inert, so focus
-  can't leave it. Opening focuses the first `autofocus` element, else the first
-  focusable one (the close button); closing returns focus to the element that
-  had it before.
-- Closing: Escape, a click on the backdrop (only when the press also started
-  there, so dragging a selection out of the panel doesn't close) and the header
-  close button call `onClose`; the modal itself only closes through `open`.
-  Disable them with `closeOnEscape={false}`, `closeOnBackdrop={false}`,
-  `hideCloseButton`. A native close (`<form method="dialog">`) also calls
-  `onClose`. Escape handled inside (e.g. by an open `Combobox`) doesn't reach it.
-- Naming: `title` renders an `<h2>` and labels the dialog; without it pass
-  `ariaLabel`. `describedBy` sets `aria-describedby`. `closeLabel` defaults to
-  `Close`.
-- Page scroll is locked while a modal is open. Width via `--modal-width`
-  (default `32rem`); `class` is added to the `<dialog class="modal">`.
+- Focus goes to the first `autofocus`, else first focusable element (the close
+  button), and returns on close.
+- Escape, backdrop click and close button call `onClose`; only `open` closes it.
+  Disable with `closeOnEscape={false}`, `closeOnBackdrop={false}`, `hideCloseButton`.
+  `<form method="dialog">` also calls `onClose`.
+- `onBeforeClose` guards those three triggers: return `false` or a promise (e.g.
+  ask in a second `Modal`); a rejection keeps it open, further requests are ignored
+  while pending. It doesn't get the reason; to treat a trigger differently, disable
+  it reactively (`closeOnBackdrop={!dirty()}`).
+- Not guarded: setting `open` false yourself, and native closes, as the `<dialog>`
+  is already closed when `onClose` fires, so forms with pending changes must not
+  use `<form method="dialog">`. Repeated browser close requests (Android back) may
+  bypass a veto. Page unload needs the consumer's `beforeunload`.
+- Naming: `title` renders an `<h2>` and labels the dialog; else pass `ariaLabel`.
+  Also `describedBy`, `closeLabel` (`Close`).
+- Locks page scroll. Width via `--modal-width` (default `32rem`); `class` is added
+  to `<dialog class="modal">`.
 
-## Vite plugin (`@serkonda7/solid-components/vite`, `src/vite.ts`)
+## Vite plugin (`src/vite.ts`)
 
-`tablerIcons()` is for apps that import `@tabler/icons-solidjs` themselves; the
-components don't need it because `dist/` bundles their icons. `vite-plugin-solid`
-adds the `solid` export condition, which resolves the package to its source
-barrel: in dev that is ~6000 separate module requests and the page hangs.
+`tablerIcons()` is for apps importing `@tabler/icons-solidjs` themselves; `dist/`
+already bundles the components' icons. `vite-plugin-solid` adds the `solid` export
+condition, which resolves to the source barrel (~6000 dev requests).
 
-```ts
-import { tablerIcons } from '@serkonda7/solid-components/vite'
-plugins: [tablerIcons(), solid()] // before solid()
-```
-
-- Rewrites `import { IconX, IconY as Y } from '@tabler/icons-solidjs'` to per-icon
-  default imports (dev and build); `type` specifiers are dropped. The package is
-  resolved from each importer, so it uses the app's own install.
+- Rewrites named icon imports to per-icon default imports (dev and build), resolved
+  from each importer; `type` specifiers are dropped.
 - Never falls back to the barrel: namespace/default/dynamic imports, re-exports,
-  and unknown names fail the transform. In dev, any other resolution of the
-  package root is an error naming the importer, and the package is excluded from
-  `optimizeDeps`. Don't add an alias or `vite-plugin-entry-shaking` alongside it.
-- Runs in Node: `scripts/build.ts` bundles it with `Bun.build` into `dist/vite.js`,
-  separate from the browser entry. `vite` is an optional peer dependency.
+  and unknown names fail the transform, and in dev so does any other resolution of
+  the package root. Don't add an alias or `vite-plugin-entry-shaking` alongside it.
+- Runs in Node: `scripts/build.ts` bundles it separately into `dist/vite.js`.
+  `vite` is an optional peer dependency.
 
 ## Add a component
-- Export it from `src/index.ts`; it is the package entry (`vite.config.ts` uses it).
-- Co-locate styles in `src/`; `scripts/build.ts` copies `src/styles.css` to `dist/`.
-  Never edit `dist/` by hand.
-- Add a demo to `examples/App.tsx`.
-- No new runtime deps; use SolidJS (a peer dep, `external` in `vite.config.ts`),
-  `@tabler/icons-solidjs` for icons (a dev dep, bundled into `dist/` so only the
-  used icons ship), and `@tanstack/solid-table` for table logic (a dependency,
-  `external` so apps using it directly share one copy).
 
-## DataTable invariants (`src/data-table.tsx`)
-- TanStack Table owns the row model and the sorting, visibility, order, and sizing
-  logic. Its state is derived from the public props and signals; `on*Change`
-  handlers map it back to the public callbacks. No TanStack type is public API.
-  Pagination is plain props: the row model never pages, as the server does.
-- Sorting, visibility, and order are controlled table state, so read `table.atoms`
-  or those memos, not TanStack's defaults. Sizing is the table's own state and is
-  empty until the first resize or restore, because `width` props may be CSS
-  lengths. `columnWidths` writes into it instead of replacing it, so a drag can
-  update live while `onColumnWidthsChange` fires only at the end.
-- Fitting measures cloned cells in an offscreen table (`fitColumn`), since cells in
-  place can't report less than their current width. Clear `extraWidth` before the
-  sizing, or the fit effect refills the emptied columns.
-- The resize gesture is custom (pointer capture, a drag threshold, keyboard) rather
-  than `columnResizingFeature`, which has no keyboard path and pins on mousedown.
-- Reactive props accept `T | Accessor<T>`; unwrap via `read()`.
-  Do not call the prop directly.
-- Cell precedence: `getCell` → `column.getValue` → `null`.
-- Sort buttons render for `column.sortable` columns; in controlled mode (`sortKey`
-  or `sortDirection` set) only if `onSort` or `onSortChange` is set. The table
-  sorts rows only when uncontrolled.
-- Visibility state drops unknown keys and omits `toggleable: false` columns from
-  tracking (they stay visible implicitly); output keys follow `columns` order.
-- Order state (`columnOrder`) is separate from visibility and always lists every
-  column key, `toggleable: false` columns included. Alt+Arrow restores focus after
-  reordering; a `toggleable: false` item takes focus on its grip, as its checkbox
-  is disabled (covered by `src/data-table.test.tsx`). The touch drag listens on
-  `document` because reordering can detach the grip.
+- Export it from `src/index.ts`, style it in `src/`, add a demo to `examples/App.tsx`.
+- Never edit `dist/`.
+- No new runtime deps. SolidJS is an external peer dep, `@tabler/icons-solidjs` a
+  dev dep bundled into `dist/`, `@tanstack/solid-table` an external dependency.
+
+## Invariants
+
+### DataTable (`src/data-table.tsx`)
+- TanStack Table owns the row model and sorting, visibility, order, and sizing
+  logic; its state derives from public props, `on*Change` maps back to callbacks. No
+  TanStack type is public API. Pagination is plain props: the row model never pages.
+- Sorting, visibility, and order are controlled table state: read `table.atoms` or
+  those memos, not TanStack's defaults.
+- Sizing is the table's own state, empty until the first resize or restore, because
+  `width` props may be CSS lengths. `columnWidths` writes into it, so a drag updates
+  live while `onColumnWidthsChange` fires only at the end.
+- `fitColumn` measures clones in an offscreen table, since cells in place can't
+  report less than their current width. Clear `extraWidth` before the sizing, or
+  the fit effect refills the emptied columns.
+- The resize gesture is custom: `columnResizingFeature` has no keyboard path and
+  pins on mousedown.
+- Unwrap reactive props via `read()`; don't call them directly.
+- Visibility state drops unknown keys and omits `toggleable: false` columns; output
+  follows `columns` order.
+- Order state always lists every column, `toggleable: false` included. Alt+Arrow
+  restores focus after reordering; a `toggleable: false` item focuses its grip, as
+  its checkbox is disabled. The touch drag listens on `document` because reordering
+  can detach the grip.
 - Header markup must not change size with sort state; keep the fixed-width
-  `.data-table-sort-indicator` (covered by `src/data-table.test.tsx`).
+  `.data-table-sort-indicator`.
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
-- `toolbar` content renders at the start of the toolbar row; the row shows when
-  it or the customizer is present.
-- Customizer panel dismisses on outside `pointerdown` and `Escape` with cleanup in
-  `createEffect`; keep both listeners paired.
+- The toolbar row shows when `toolbar` or the customizer is present.
+- The customizer panel dismisses on outside `pointerdown` and `Escape`; keep both
+  listeners paired, with cleanup.
 
-## FilterTable invariants (`src/filter-table.tsx`)
+### FilterTable (`src/filter-table.tsx`)
 - Filtering runs in a headless TanStack table with one column per filter, plus a
-  search column that the global filter targets so the quick search matches the
-  joined search text. `DataTable` receives the resulting rows.
-- `match` and `getSearchText` run inside TanStack's memoized row models, so signals
-  they read don't re-filter; reactive inputs belong in `rows` or `filterValues`.
-- The quick search lives under the reserved key `q`; do not use it as a filter key.
-- Values are normalized (trimmed, empty strings/arrays dropped) before they are
-  stored or emitted.
-- Both tab panels stay mounted (`hidden`) so the table keeps its sort and column
-  state across tab switches.
-- Quick search and pills render in `DataTable`'s `toolbar` slot, beside the
-  column customizer.
+  search column the global filter targets.
+- `match` and `getSearchText` run in memoized row models, so signals they read don't
+  re-filter; reactive inputs belong in `rows` or `filterValues`.
+- `q` is reserved for the quick search; don't use it as a filter key.
+- Values are normalized (trimmed, empties dropped) before being stored or emitted.
+- Both tab panels stay mounted (`hidden`) to keep table state across tab switches.
+- Quick search and pills render in `DataTable`'s `toolbar` slot.
 
-## Combobox invariants (`src/combobox.tsx`)
+### Combobox (`src/combobox.tsx`)
 - Option ids are `${id}-option-${index}` over the filtered list; the add entry takes
-  index `filtered.length`. Options `preventDefault` on `mousedown` so the input's
-  blur doesn't close the list before the click lands.
+  index `filtered.length`.
+- Options `preventDefault` on `mousedown` so input blur doesn't close the list
+  before the click lands.
 - `onInput` reads the typed value before opening: opening resets the bound value.
 
-## SearchBar invariants (`src/search-bar.tsx`)
-- The keydown listener is registered on `document` in `onMount` and removed in
-  `onCleanup`; it ignores Shift/Alt combinations so it doesn't shadow other bindings.
-- The hint and the clear button share the trailing slot, so only one renders at a time.
+### SearchBar (`src/search-bar.tsx`)
+- The `document` keydown listener ignores Shift/Alt combinations so it doesn't
+  shadow other bindings.
+- The hint and clear button share the trailing slot; only one renders at a time.
 
-## Styling contract (`src/styles.css`)
-- FilterTable themes via `--filter-table-*` vars (`border`, `bg`, `muted`,
-  `accent`, `pill-bg`) with the same fallback chain.
-- SearchBar themes via `--search-bar-*` vars (`border`, `bg`, `muted`, `hover-bg`)
-  with the same fallback chain.
-- Combobox themes via `--combobox-*` vars (`border`, `bg`, `panel-bg`, `hover-bg`,
-  `muted`, `accent`) with the same fallback chain.
-- Theme via `--data-table-*` vars (`border`, `bg`, `header-bg`, `row-hover-bg`,
-  `skeleton-bg`, `max-height`, `customizer-bg`, `customizer-hover-bg`, `panel-bg`)
-  with fallbacks and `light-dark()`; `color-scheme` is inherited from the consumer,
-  do not set it here.
+## Styling (`src/styles.css`)
+
+Theme via CSS vars with fallbacks and `light-dark()`. `color-scheme` is inherited
+from the consumer; don't set it here.
+
+- `--data-table-*`: `border`, `bg`, `header-bg`, `row-hover-bg`, `skeleton-bg`,
+  `max-height`, `customizer-bg`, `customizer-hover-bg`, `panel-bg`
+- `--filter-table-*`: `border`, `bg`, `muted`, `accent`, `pill-bg`
+- `--combobox-*`: `border`, `bg`, `panel-bg`, `hover-bg`, `muted`, `accent`
+- `--search-bar-*`: `border`, `bg`, `muted`, `hover-bg`
 
 ## Verify
-Tests (`src/**/*.test.tsx`) run in headless Chromium via Vitest browser mode, since
-they measure real layout; install it once with `bunx playwright install chromium`.
-Run the gate defined in `.github/workflows/ci.yml` using the script names in
-`package.json`. Fix formatting with the write-mode lint script; keep `aria-sort`,
-dialog, and checkbox label semantics when touching table markup.
+
+Run the gates from `.github/workflows/ci.yml`; script names are in `package.json`.
+Tests run in headless Chromium (`bunx playwright install chromium` once) because they
+measure real layout. Keep `aria-sort`, dialog, and checkbox label semantics when
+touching table markup.
