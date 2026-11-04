@@ -53,6 +53,11 @@ export interface ComboboxProps {
 	searchLabel?: string
 	/** Shown when no option matches the search. Defaults to `No matching objects`. */
 	noMatchesLabel?: string
+	/**
+	 * Float option previews at the mouse cursor while the pointer moves over the
+	 * list. Keyboard navigation returns them to their place beside the list.
+	 */
+	previewAtCursor?: boolean
 	class?: string
 }
 
@@ -73,6 +78,8 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	const [open, setOpen] = createSignal(false)
 	const [query, setQuery] = createSignal('')
 	const [active, setActive] = createSignal(0)
+	// Last pointer position over the list; cleared by keyboard navigation.
+	const [cursor, setCursor] = createSignal<{ x: number; y: number }>()
 
 	const choices = createMemo((): ComboboxOption[] =>
 		props.emptyLabel === undefined
@@ -120,6 +127,7 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 		setQuery('')
 		const index = choices().findIndex((o) => String(o.value) === props.value)
 		setActive(Math.max(index, 0))
+		setCursor(undefined)
 		setOpen(true)
 		void props.onOpen?.()
 	}
@@ -148,6 +156,7 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 			e.preventDefault()
+			setCursor(undefined)
 			step(e.key === 'ArrowDown' ? 1 : -1)
 			return
 		}
@@ -237,6 +246,9 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 		)
 	}
 
+	const cursorPreview = (): { x: number; y: number } | undefined =>
+		props.previewAtCursor === true ? cursor() : undefined
+
 	function listbox(): JSX.Element {
 		return (
 			<div
@@ -245,6 +257,11 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 				id={listId()}
 				ref={list}
 				role="listbox"
+				onMouseMove={(e) => {
+					if (props.previewAtCursor === true) {
+						setCursor({ x: e.clientX, y: e.clientY })
+					}
+				}}
 			>
 				<For
 					each={filtered()}
@@ -316,7 +333,19 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 			<Show when={open()}>{listbox()}</Show>
 			<Show when={open() && activePreview()}>
 				{(preview) => (
-					<div class="combobox-preview" aria-hidden="true">
+					<div
+						class="combobox-preview"
+						classList={{ 'combobox-preview-cursor': cursorPreview() !== undefined }}
+						style={
+							cursorPreview()
+								? {
+										'--combobox-cursor-x': `${cursorPreview()?.x}px`,
+										'--combobox-cursor-y': `${cursorPreview()?.y}px`,
+									}
+								: undefined
+						}
+						aria-hidden="true"
+					>
 						<Dynamic component={preview()} />
 					</div>
 				)}

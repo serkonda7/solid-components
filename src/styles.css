@@ -491,6 +491,15 @@ scroll away with the table. */
 	pointer-events: none;
 }
 
+/* `previewAtCursor`: float at the mouse, shifted back into the viewport. */
+.combobox-preview-cursor {
+	position: fixed;
+	top: calc(var(--combobox-cursor-y) + 1rem);
+	left: calc(var(--combobox-cursor-x) + 1rem);
+	translate: min(0px, calc(100vw - var(--combobox-cursor-x) - 1.5rem - 100%))
+		min(0px, calc(100vh - var(--combobox-cursor-y) - 1.5rem - 100%));
+}
+
 .combobox-option,
 .combobox-empty {
 	padding: 0.3rem 0.5rem;

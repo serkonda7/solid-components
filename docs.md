@@ -160,6 +160,8 @@ or pass `ariaLabel`.
 - Option `icon` is any `Component<{ size?: number }>`. `preview` is a `Component`
   shown beside the list while the option is highlighted; it is `aria-hidden`, so
   the label must still name the option.
+- `previewAtCursor` floats previews at the mouse while it moves over the list
+  (kept inside the viewport); arrow keys return them beside the list.
 - Texts: `placeholder`, `searchLabel` (`Search`), `noMatchesLabel`
   (`No matching objects`), `addLabel` (`Add`).
 - The value is mirrored in the input's `data-value`.

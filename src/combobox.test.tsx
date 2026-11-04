@@ -19,6 +19,7 @@ afterEach(() => {
 function mount(
 	onAdd?: (query: string) => void,
 	items: ComboboxOption[] = options,
+	previewAtCursor?: boolean,
 ): {
 	input: HTMLInputElement
 	value: () => string
@@ -36,6 +37,7 @@ function mount(
 				emptyLabel="None"
 				onAdd={onAdd}
 				addLabel="Add item"
+				previewAtCursor={previewAtCursor}
 			/>
 		),
 		container,
@@ -124,4 +126,26 @@ test('preview follows the highlighted option while the list is open', () => {
 	press(input, 'ArrowUp')
 	press(input, 'Escape')
 	expect(preview()).toBeUndefined()
+})
+
+test('previewAtCursor floats the preview at the mouse until the keyboard takes over', () => {
+	const { input } = mount(
+		undefined,
+		[{ value: 1, label: 'Alpha', preview: () => <span>Alpha preview</span> }],
+		true,
+	)
+	press(input, 'ArrowDown')
+	const row = document.querySelector<HTMLElement>('[data-index="1"]')
+	row?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 40, clientY: 60 }))
+	const preview = (): HTMLElement | null =>
+		document.querySelector<HTMLElement>('.combobox-preview')
+	expect(preview()?.classList.contains('combobox-preview-cursor')).toBe(true)
+	expect(preview()?.style.getPropertyValue('--combobox-cursor-x')).toBe('40px')
+	expect(preview()?.style.getPropertyValue('--combobox-cursor-y')).toBe('60px')
+	expect(getComputedStyle(preview() as HTMLElement).position).toBe('fixed')
+
+	press(input, 'ArrowUp')
+	press(input, 'ArrowDown')
+	expect(preview()?.classList.contains('combobox-preview-cursor')).toBe(false)
+	expect(getComputedStyle(preview() as HTMLElement).position).toBe('absolute')
 })
