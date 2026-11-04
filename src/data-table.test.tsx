@@ -272,6 +272,50 @@ test('column visibility can be toggled and shown again', () => {
 	expect(changes).toEqual([['price'], ['name', 'price']])
 })
 
+test('storageKey restores, saves, and resets column visibility', () => {
+	const key = 'test:columns:storage'
+	localStorage.setItem(key, JSON.stringify(['price', 'gone']))
+	try {
+		const container = mountCustomizer({ storageKey: key })
+		expect(headers(container)).toEqual(['Price'])
+
+		container
+			.querySelectorAll<HTMLInputElement>('.data-table-customizer-item input')[2]
+			?.click()
+		expect(headers(container)).toEqual(['Price', 'ID'])
+		expect(JSON.parse(localStorage.getItem(key) ?? 'null')).toEqual(['price', 'id'])
+
+		container
+			.querySelectorAll<HTMLButtonElement>('.data-table-customizer-actions button')[1]
+			?.click()
+		expect(headers(container)).toEqual(['Name', 'Price', 'ID'])
+		expect(localStorage.getItem(key)).toBeNull()
+	} finally {
+		localStorage.removeItem(key)
+	}
+})
+
+test('storageKey ignores corrupt entries and controlled visibility', () => {
+	const key = 'test:columns:corrupt'
+	localStorage.setItem(key, '{not json')
+	try {
+		const container = mountCustomizer({ storageKey: key })
+		expect(headers(container)).toEqual(['Name', 'Price', 'ID'])
+		dispose?.()
+		document.body.innerHTML = ''
+
+		localStorage.setItem(key, JSON.stringify(['id']))
+		const controlled = mountCustomizer({ storageKey: key, visibleColumns: ['name'] })
+		expect(headers(controlled)).toEqual(['Name'])
+		controlled
+			.querySelectorAll<HTMLInputElement>('.data-table-customizer-item input')[1]
+			?.click()
+		expect(JSON.parse(localStorage.getItem(key) ?? 'null')).toEqual(['id'])
+	} finally {
+		localStorage.removeItem(key)
+	}
+})
+
 test('resizing by keyboard pins widths and reports them', () => {
 	const changes: Record<string, number>[] = []
 	const container = document.createElement('div')

@@ -93,6 +93,11 @@ export interface DataTableProps<TRow> {
 	visibleColumns?: string[] | Accessor<string[]>
 	defaultVisibleColumns?: string[]
 	onVisibleColumnsChange?: (visibleKeys: string[]) => void
+	/**
+	 * Persists the visible columns in `localStorage` under this exact key, e.g.
+	 * `'myapp:columns:customers'`. Ignored while `visibleColumns` is controlled.
+	 */
+	storageKey?: string
 	/** Controlled column order as column keys; pair with `onColumnOrderChange`. */
 	columnOrder?: string[] | Accessor<string[]>
 	defaultColumnOrder?: string[]
@@ -151,6 +156,32 @@ function read<T>(value: T | Accessor<T>): T {
 	return typeof value === 'function' ? (value as Accessor<T>)() : value
 }
 
+/** Visible column keys saved under `key`, or undefined when unset, corrupt, or unavailable. */
+function loadVisibleKeys(key: string | undefined): string[] | undefined {
+	if (key === undefined) return undefined
+	try {
+		const raw = globalThis.localStorage?.getItem(key)
+		if (!raw) return undefined
+		const parsed: unknown = JSON.parse(raw)
+		return Array.isArray(parsed) && parsed.every((value) => typeof value === 'string')
+			? parsed
+			: undefined
+	} catch {
+		return undefined
+	}
+}
+
+/** Saves visible column keys under `key`; undefined removes the entry. */
+function saveVisibleKeys(key: string | undefined, keys: string[] | undefined): void {
+	if (key === undefined) return
+	try {
+		if (keys === undefined) globalThis.localStorage?.removeItem(key)
+		else globalThis.localStorage?.setItem(key, JSON.stringify(keys))
+	} catch {
+		// Storage full or unavailable (private mode): the choice lasts for the session.
+	}
+}
+
 function columnStyle<TRow>(
 	column: DataTableColumn<TRow>,
 	override?: number,
@@ -196,8 +227,12 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				.filter((column) => column.defaultVisible !== false)
 				.map((column) => column.key),
 	)
+	// Read once: the key names a table, it is not expected to change.
+	const storageKey = untrack(() => props.storageKey)
 	const [uncontrolledVisible, setUncontrolledVisible] = createSignal<string[] | undefined>(
-		undefined,
+		untrack(() =>
+			props.visibleColumns === undefined ? loadVisibleKeys(storageKey) : undefined,
+		),
 	)
 	const visibleKeys = () =>
 		props.visibleColumns !== undefined
@@ -306,6 +341,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		const ordered = orderKeys(next)
 		if (props.visibleColumns === undefined) {
 			setUncontrolledVisible(ordered)
+			saveVisibleKeys(storageKey, ordered)
 		}
 		props.onVisibleColumnsChange?.(ordered)
 	}
@@ -334,6 +370,8 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	function resetColumns(): void {
 		setVisibleKeys(defaultVisibleKeys())
+		// Forget the saved choice so later changes to the defaults apply.
+		if (props.visibleColumns === undefined) saveVisibleKeys(storageKey, undefined)
 		const keys = props.columns.map((column) => column.key)
 		const known = (props.defaultColumnOrder ?? []).filter((key) => keys.includes(key))
 		setColumnOrder([...new Set([...known, ...keys])])

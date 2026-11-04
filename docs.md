@@ -38,6 +38,9 @@ drag or Alt+ArrowUp/Down.
 - Per column: `toggleable: false` (always shown), `defaultVisible: false`.
 - Visibility: `defaultVisibleColumns`, or controlled with `visibleColumns` +
   `onVisibleColumnsChange`.
+- `storageKey` persists uncontrolled visibility in `localStorage` under that exact
+  key (include your app prefix, e.g. `'myapp:columns:customers'`). Stored as a JSON
+  array of keys; unknown keys are ignored, `Reset` removes the entry.
 - Order: `defaultColumnOrder`, or controlled with `columnOrder` +
   `onColumnOrderChange`. Missing columns are appended; unknown keys ignored.
 - `Reset` restores default visibility and order and clears widths.
