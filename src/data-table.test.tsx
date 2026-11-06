@@ -702,3 +702,49 @@ test('FilterTable counts all pages in its results badge', () => {
 	)
 	expect(container.querySelector('.filter-table-badge')?.textContent).toBe('42')
 })
+
+test('groupBy renders collapsible groups in order with sorted rows', () => {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<DataTable
+				rows={rows}
+				columns={columns}
+				getRowId={(row) => row.id}
+				defaultSort={{ key: 'price', direction: 'asc' }}
+				groupBy={(row) => (row.price > 1 ? 'pricey' : 'cheap')}
+				groupOrder={['pricey']}
+				groupLabel={(key, members) => `${key} (${members.length})`}
+				defaultGroupOpen={(key) => key === 'pricey'}
+			/>
+		),
+		container,
+	)
+	const toggles = [...container.querySelectorAll<HTMLButtonElement>('.data-table-group-toggle')]
+	expect(toggles.map((button) => button.textContent)).toEqual(['pricey (2)', 'cheap (1)'])
+	expect(toggles.map((button) => button.getAttribute('aria-expanded'))).toEqual(['true', 'false'])
+	const names = (): string[] =>
+		[...container.querySelectorAll('tbody tr:not(.data-table-group-row) td:first-child')].map(
+			(cell) => cell.textContent ?? '',
+		)
+	expect(names()).toEqual(['B', 'A'])
+	toggles[1]?.click()
+	expect(names()).toEqual(['B', 'A', 'C'])
+	toggles[0]?.click()
+	expect(names()).toEqual(['C'])
+})
+
+test('columnLines marks the table for column separators', () => {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => <DataTable rows={rows} columns={columns} getRowId={(row) => row.id} columnLines />,
+		container,
+	)
+	const table = container.querySelector('table')
+	expect(table?.classList.contains('data-table-column-lines')).toBe(true)
+	const cells = container.querySelectorAll('tbody tr:first-child td')
+	expect(getComputedStyle(cells[0] as Element).borderLeftStyle).toBe('none')
+	expect(getComputedStyle(cells[1] as Element).borderLeftStyle).toBe('solid')
+})

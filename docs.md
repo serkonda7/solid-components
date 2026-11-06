@@ -59,6 +59,9 @@ fit content.
 - Saved widths ignore the column's `minWidth`/`maxWidth`.
 
 ### Sticky, loading
+- `columnLines` draws a vertical line between columns, colored by
+  `--data-table-column-line` (falls back to `--data-table-border`).
+- `actionsLabel` names the `rowActions` column header (default `Actions`).
 - `stickyHeader` scrolls the table inside a viewport capped by
   `--data-table-max-height` (default `80dvh`).
 - `stickyActions` pins the `rowActions` column right.
@@ -66,6 +69,17 @@ fit content.
   your surface, and keep `--data-table-row-hover-bg` opaque with `stickyActions`.
 - `loading` without rows shows `skeletonRows` (default 5) skeletons; with rows it
   keeps them and shows a status below. `loadingContent` replaces both.
+
+### Row groups
+`groupBy(row)` splits the rows into collapsible groups, each its own `<tbody>`
+under a full-width heading row (`.data-table-group-row`) with a toggle button.
+
+- `groupLabel(key, rows)` renders the heading after the chevron; defaults to the key.
+- `groupOrder` lists keys in display order; unlisted groups follow in row order,
+  empty groups are hidden.
+- `defaultGroupOpen(key, rows)` decides the initial state (default: expanded);
+  toggles are kept per key while the table is mounted.
+- Sorting applies within each group. Style the band with `--data-table-group-bg`.
 
 ### Pagination
 Server-side only: `rows` holds just the current page.
@@ -278,6 +292,7 @@ condition, which resolves to the source barrel (~6000 dev requests).
   can detach the grip.
 - Header markup must not change size with sort state; keep the fixed-width
   `.data-table-sort-indicator`.
+- Group heading rows are skipped when fitting columns: their cell spans the row.
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
 - The toolbar row shows when `toolbar` or the customizer is present.
 - The customizer panel dismisses on outside `pointerdown` and `Escape`; keep both

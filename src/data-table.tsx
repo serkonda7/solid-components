@@ -1,4 +1,4 @@
-import { IconChevronLeft, IconChevronRight, IconMenu } from '@tabler/icons-solidjs'
+import { IconChevronDown, IconChevronLeft, IconChevronRight, IconMenu } from '@tabler/icons-solidjs'
 import {
 	type ColumnDef,
 	type ColumnSizingState,
@@ -84,6 +84,8 @@ export interface DataTableProps<TRow> {
 	getRowId: (row: TRow) => string | number
 	getCell?: (row: TRow, column: DataTableColumn<TRow>) => JSX.Element
 	rowActions?: (row: TRow) => JSX.Element
+	/** Header of the `rowActions` column. Defaults to `Actions`. */
+	actionsLabel?: string
 	sortKey?: string | Accessor<string | undefined>
 	sortDirection?: DataTableSortDirection | Accessor<DataTableSortDirection>
 	defaultSort?: DataTableSort
@@ -119,6 +121,8 @@ export interface DataTableProps<TRow> {
 	stickyHeader?: boolean
 	/** Keeps the `rowActions` column visible while the columns scroll horizontally. */
 	stickyActions?: boolean
+	/** Draws a vertical line between columns. */
+	columnLines?: boolean
 	/** Renders a pager for server-side pagination; `rows` must hold only the current page. */
 	pagination?: DataTablePagination | Accessor<DataTablePagination>
 	onPaginationChange?: (pagination: { page: number; pageSize: number }) => void
@@ -130,6 +134,17 @@ export interface DataTableProps<TRow> {
 	/** Skeleton rows shown while loading without rows. Defaults to 5. */
 	skeletonRows?: number
 	emptyContent?: JSX.Element
+	/**
+	 * Splits the rows into collapsible groups by key, each its own `<tbody>`
+	 * under a heading row; rows keep the table's sort within their group.
+	 */
+	groupBy?: (row: TRow) => string
+	/** Heading content of a group, after its toggle. Defaults to the key. */
+	groupLabel?: (key: string, rows: TRow[]) => JSX.Element
+	/** Group keys in display order; unlisted groups follow in row order. */
+	groupOrder?: string[] | Accessor<string[]>
+	/** Whether a group starts expanded. Defaults to expanded. */
+	defaultGroupOpen?: (key: string, rows: TRow[]) => boolean
 	class?: string
 }
 
@@ -313,6 +328,34 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const visibleColumns = createMemo(() => toDataColumns(table.getVisibleLeafColumns()))
 	// Rows are keyed by the consumer's objects so their DOM survives new `rows` arrays.
 	const sortedRows = createMemo(() => table.getRowModel().rows.map((row) => row.original))
+	/** Sorted rows per group key, in `groupOrder` and then first-row order. */
+	const groupedRows = createMemo(() => {
+		const groupBy = props.groupBy
+		const groups = new Map<string, TRow[]>()
+		if (!groupBy) return groups
+		for (const key of read(props.groupOrder ?? [])) groups.set(key, [])
+		for (const row of sortedRows()) {
+			const key = groupBy(row)
+			const members = groups.get(key)
+			if (members) members.push(row)
+			else groups.set(key, [row])
+		}
+		for (const [key, members] of groups) {
+			if (members.length === 0) groups.delete(key)
+		}
+		return groups
+	})
+	// Keyed by string so a group's DOM survives new rows.
+	const groupKeys = createMemo(() => [...groupedRows().keys()])
+	const groupRows = (key: string): TRow[] => groupedRows().get(key) ?? []
+	/** Explicit expand/collapse choices; other groups follow `defaultGroupOpen`. */
+	const [groupToggles, setGroupToggles] = createSignal<Record<string, boolean>>({})
+	const isGroupOpen = (key: string): boolean =>
+		groupToggles()[key] ?? props.defaultGroupOpen?.(key, groupRows(key)) ?? true
+	function toggleGroup(key: string): void {
+		const open = isGroupOpen(key)
+		setGroupToggles((toggles) => ({ ...toggles, [key]: !open }))
+	}
 	const toggleableColumns = createMemo(() =>
 		props.columns.filter((column) => column.toggleable !== false),
 	)
@@ -406,6 +449,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		probe.classList.remove('data-table-resized')
 		probe.style.cssText = 'position:absolute;visibility:hidden;width:max-content;max-width:none'
 		for (const row of tableRef.rows) {
+			if (row.classList.contains('data-table-group-row')) continue
 			const cell = row.cells[index]?.cloneNode(true) as HTMLTableCellElement | undefined
 			if (!cell) continue
 			cell.removeAttribute('style')
@@ -748,6 +792,36 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		)
 	}
 
+	function groupBody(key: string): JSX.Element {
+		return (
+			<tbody class="data-table-group">
+				<tr class="data-table-group-row">
+					<th
+						scope="rowgroup"
+						colSpan={visibleColumns().length + (props.rowActions ? 1 : 0)}
+					>
+						<button
+							type="button"
+							class="data-table-group-toggle"
+							aria-expanded={isGroupOpen(key)}
+							onClick={() => toggleGroup(key)}
+						>
+							<IconChevronDown
+								size={14}
+								aria-hidden="true"
+								class="data-table-group-chevron"
+							/>
+							{props.groupLabel ? props.groupLabel(key, groupRows(key)) : key}
+						</button>
+					</th>
+				</tr>
+				<Show when={isGroupOpen(key)}>
+					<For each={groupRows(key)}>{bodyRow}</For>
+				</Show>
+			</tbody>
+		)
+	}
+
 	function skeletonRow(): JSX.Element {
 		return (
 			// biome-ignore lint/a11y/noAriaHiddenOnFocusable: skeleton cells hold nothing focusable
@@ -863,6 +937,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 						'data-table-resized': tableWidth() !== undefined,
 						'data-table-sticky-header': props.stickyHeader,
 						'data-table-sticky-actions': props.stickyActions,
+						'data-table-column-lines': props.columnLines,
 					}}
 					aria-busy={loading()}
 					style={tableWidth() !== undefined ? { width: `${tableWidth()}px` } : undefined}
@@ -871,12 +946,19 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 						<tr>
 							<For each={visibleColumns()}>{headerCell}</For>
 							<Show when={props.rowActions}>
-								<th class="data-table-actions">Actions</th>
+								<th class="data-table-actions">
+									{props.actionsLabel ?? 'Actions'}
+								</th>
 							</Show>
 						</tr>
 					</thead>
+					<Show when={props.groupBy}>
+						<For each={groupKeys()}>{groupBody}</For>
+					</Show>
 					<tbody>
-						<For each={sortedRows()}>{bodyRow}</For>
+						<Show when={!props.groupBy}>
+							<For each={sortedRows()}>{bodyRow}</For>
+						</Show>
 						<Show when={showSkeleton()}>
 							<For
 								each={Array.from({

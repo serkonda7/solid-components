@@ -133,11 +133,60 @@
 	border-collapse: collapse;
 }
 
+/* Group heading rows hold a single cell, so they stay unsplit. */
+.data-table-column-lines :is(th, td) + :is(th, td) {
+	border-left: 1px solid
+		var(
+			--data-table-column-line,
+			var(
+				--data-table-border,
+				var(--border, light-dark(#d0d0d0, #3a3e45))
+			)
+		);
+}
+
 .data-table tbody tr:hover {
 	background: var(
 		--data-table-row-hover-bg,
 		var(--surface-hover, light-dark(#f5f5f5, #292d33))
 	);
+}
+
+.data-table-group-row th {
+	padding: 0.4rem 0.5rem;
+	text-align: left;
+	background: var(
+		--data-table-group-bg,
+		var(--surface-hover, light-dark(#f5f5f5, #292d33))
+	);
+}
+
+.data-table tbody tr.data-table-group-row:hover {
+	background: none;
+}
+
+.data-table-group-toggle {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	width: 100%;
+	padding: 0;
+	font: inherit;
+	font-weight: 600;
+	color: inherit;
+	text-align: left;
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+
+.data-table-group-chevron {
+	flex: none;
+	transition: transform 150ms ease;
+}
+
+.data-table-group-toggle[aria-expanded="false"] .data-table-group-chevron {
+	transform: rotate(-90deg);
 }
 
 .data-table-resized {
