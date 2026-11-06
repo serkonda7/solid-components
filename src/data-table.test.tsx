@@ -347,7 +347,8 @@ test('resizing by keyboard pins widths and reports them', () => {
 	const after = columnWidths(container)
 	expect(after[0]).toBeCloseTo((before[0] ?? 0) + 10, 0)
 	expect(after[1]).toBeCloseTo(before[1] ?? 0, 0)
-	expect(table.getBoundingClientRect().width).toBeCloseTo(tableBefore + 10, 0)
+	// The filler gives up the space, so the table keeps filling its container.
+	expect(table.getBoundingClientRect().width).toBeCloseTo(tableBefore, 0)
 	expect(Object.keys(changes[0] ?? {})).toEqual(['name', 'price', 'id'])
 })
 
@@ -376,12 +377,14 @@ test('column widths can be restored', () => {
 		rowActions: edit,
 		resizableColumns: true,
 	})
-	const [name, price, id, actions] = columnWidths(container)
+	const [name, price, id, actions, filler] = columnWidths(container)
 	expect([name, price, id]).toEqual([200, 100, 80])
 	expect(actions).toBeGreaterThan(0)
+	// The filler cell takes the rest of the container.
+	expect(filler).toBeCloseTo(600 - 380 - (actions ?? 0), 0)
 	const table = container.querySelector('table')
 	expect(table?.classList.contains('data-table-resized')).toBe(true)
-	expect(table?.getBoundingClientRect().width).toBeCloseTo(380 + (actions ?? 0), 0)
+	expect(table?.getBoundingClientRect().width).toBeCloseTo(600, 0)
 })
 
 test('restored widths fit columns missing from them and follow the prop', () => {

@@ -423,8 +423,10 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	// Pixel widths once resized; until then the browser lays out the columns.
+	// The table then fills its container at least (`min-width: 100%`), and a
+	// filler cell at the end of each row takes what the columns leave.
 	const widths = () => table.atoms.columnSizing.get()
-	/** Width of what isn't a data column (actions); set once the table is resized. */
+	/** Content width of the actions column, if any; set once the table is resized. */
 	const [extraWidth, setExtraWidth] = createSignal<number | undefined>()
 	const tableWidth = () => {
 		const extra = extraWidth()
@@ -495,15 +497,22 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		setExtraWidth(Math.max(extra, fitColumn(untrack(actionsIndex))))
 	})
 
-	/** Current rendered widths, which resizing pins so other columns don't shift. */
+	/**
+	 * Current rendered widths, which resizing pins so other columns don't shift.
+	 * The actions column is pinned to its content; the space it may fill until
+	 * then goes to the filler.
+	 */
 	function measureWidths(el: HTMLTableElement): { sizing: ColumnSizingState; extra: number } {
 		const sizing: ColumnSizingState = {}
 		for (const th of el.querySelectorAll<HTMLElement>('th[data-column-key]')) {
 			sizing[th.dataset.columnKey as string] = th.getBoundingClientRect().width
 		}
-		const total = Object.values(sizing).reduce((sum, width) => sum + width, 0)
-		return { sizing, extra: el.getBoundingClientRect().width - total }
+		return { sizing, extra: props.rowActions ? fitColumn(actionsIndex()) : 0 }
 	}
+
+	const resized = () => tableWidth() !== undefined
+	const actionsStyle = (): JSX.CSSProperties | undefined =>
+		resized() ? { width: `${extraWidth()}px` } : undefined
 
 	function applyWidths(sizing: ColumnSizingState, extra: number): void {
 		table.setColumnSizing(sizing)
@@ -786,7 +795,12 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					)}
 				</For>
 				<Show when={props.rowActions}>
-					<td class="data-table-actions">{props.rowActions?.(row)}</td>
+					<td class="data-table-actions" style={actionsStyle()}>
+						{props.rowActions?.(row)}
+					</td>
+				</Show>
+				<Show when={resized()}>
+					<td class="data-table-filler" aria-hidden="true" />
 				</Show>
 			</tr>
 		)
@@ -798,7 +812,11 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				<tr class="data-table-group-row">
 					<th
 						scope="rowgroup"
-						colSpan={visibleColumns().length + (props.rowActions ? 1 : 0)}
+						colSpan={
+							visibleColumns().length +
+							(props.rowActions ? 1 : 0) +
+							(resized() ? 1 : 0)
+						}
 					>
 						<button
 							type="button"
@@ -834,9 +852,12 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					)}
 				</For>
 				<Show when={props.rowActions}>
-					<td class="data-table-actions">
+					<td class="data-table-actions" style={actionsStyle()}>
 						<span class="data-table-skeleton" />
 					</td>
+				</Show>
+				<Show when={resized()}>
+					<td class="data-table-filler" />
 				</Show>
 			</tr>
 		)
@@ -946,9 +967,13 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 						<tr>
 							<For each={visibleColumns()}>{headerCell}</For>
 							<Show when={props.rowActions}>
-								<th class="data-table-actions">
+								<th class="data-table-actions" style={actionsStyle()}>
 									{props.actionsLabel ?? 'Actions'}
 								</th>
+							</Show>
+							<Show when={resized()}>
+								{/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: an empty header cell, nothing focusable */}
+								<th class="data-table-filler" aria-hidden="true" />
 							</Show>
 						</tr>
 					</thead>

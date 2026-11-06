@@ -191,7 +191,14 @@
 
 .data-table-resized {
 	table-layout: fixed;
+	min-width: 100%;
 	max-width: none;
+}
+
+/* Takes the width the columns leave, like the filler of MUI's and AG Grid's
+data grids, so rows still span the container. */
+.data-table .data-table-filler {
+	padding: 0;
 }
 
 .data-table-resized th,
@@ -262,6 +269,13 @@ scroll away with the table. */
 
 /* A sticky header cell is painted over the part that overhangs its neighbour. */
 .data-table-sticky-header .data-table-resize-handle {
+	right: 0;
+}
+
+/* The last handle would overhang the table and make it scroll. */
+.data-table
+	th:is(:last-child, :has(+ .data-table-filler))
+	> .data-table-resize-handle {
 	right: 0;
 }
 
