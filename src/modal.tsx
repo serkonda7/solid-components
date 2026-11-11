@@ -1,6 +1,7 @@
 import { IconX } from '@tabler/icons-solidjs'
 import type { JSX } from 'solid-js'
 import { createUniqueId, onCleanup, onMount, Show } from 'solid-js'
+import { cx } from './utils'
 
 export interface ModalProps {
 	/** Whether the modal is shown. The content is mounted only while open. */
@@ -100,7 +101,7 @@ function ModalDialog(props: ModalProps): JSX.Element {
 	return (
 		<dialog
 			ref={dialog}
-			class={props.class ? `modal ${props.class}` : 'modal'}
+			class={cx('modal', props.class)}
 			aria-labelledby={props.title === undefined ? undefined : titleId}
 			aria-label={props.title === undefined ? props.ariaLabel : undefined}
 			aria-describedby={props.describedBy}

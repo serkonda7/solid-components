@@ -1,5 +1,6 @@
 import type { JSX } from 'solid-js'
 import { createSignal } from 'solid-js'
+import { cx } from './utils'
 
 export interface ColorInputProps {
 	/** Hex color, `#rrggbb` or `#rgb`. */
@@ -29,7 +30,7 @@ export function ColorInput(props: ColorInputProps): JSX.Element {
 	const [draft, setDraft] = createSignal<string>()
 
 	return (
-		<div class={props.class ? `color-input ${props.class}` : 'color-input'}>
+		<div class={cx('color-input', props.class)}>
 			<input
 				type="color"
 				class="color-input-picker"

@@ -34,6 +34,15 @@ import {
 	Show,
 	untrack,
 } from 'solid-js'
+import {
+	createSavedEntries,
+	cx,
+	focusOnMount,
+	isStringArray,
+	loadJson,
+	read,
+	saveJson,
+} from './utils'
 
 export type DataTableSortDirection = 'asc' | 'desc'
 
@@ -206,34 +215,22 @@ function compareSortValues(left: unknown, right: unknown): number {
 	return String(left).localeCompare(String(right), undefined, { numeric: true })
 }
 
-function read<T>(value: T | Accessor<T>): T {
-	return typeof value === 'function' ? (value as Accessor<T>)() : value
-}
-
-/** Visible column keys saved under `key`, or undefined when unset, corrupt, or unavailable. */
-function loadVisibleKeys(key: string | undefined): string[] | undefined {
-	if (key === undefined) return undefined
-	try {
-		const raw = globalThis.localStorage?.getItem(key)
-		if (!raw) return undefined
-		const parsed: unknown = JSON.parse(raw)
-		return Array.isArray(parsed) && parsed.every((value) => typeof value === 'string')
-			? parsed
-			: undefined
-	} catch {
-		return undefined
+/** Follows a pointer until it is released or cancelled. */
+function trackPointer(
+	target: EventTarget,
+	onMove: (event: PointerEvent) => void,
+	onEnd: () => void,
+): void {
+	const move = onMove as EventListener
+	function end(): void {
+		target.removeEventListener('pointermove', move)
+		target.removeEventListener('pointerup', end)
+		target.removeEventListener('pointercancel', end)
+		onEnd()
 	}
-}
-
-/** Saves visible column keys under `key`; undefined removes the entry. */
-function saveVisibleKeys(key: string | undefined, keys: string[] | undefined): void {
-	if (key === undefined) return
-	try {
-		if (keys === undefined) globalThis.localStorage?.removeItem(key)
-		else globalThis.localStorage?.setItem(key, JSON.stringify(keys))
-	} catch {
-		// Storage full or unavailable (private mode): the choice lasts for the session.
-	}
+	target.addEventListener('pointermove', move)
+	target.addEventListener('pointerup', end)
+	target.addEventListener('pointercancel', end)
 }
 
 function sameKeys(a: string[], b: string[]): boolean {
@@ -299,7 +296,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const storageKey = untrack(() => props.storageKey)
 	const [uncontrolledVisible, setUncontrolledVisible] = createSignal<string[] | undefined>(
 		untrack(() =>
-			props.visibleColumns === undefined ? loadVisibleKeys(storageKey) : undefined,
+			props.visibleColumns === undefined
+				? loadJson(storageKey, (value) => (isStringArray(value) ? value : undefined))
+				: undefined,
 		),
 	)
 	const visibleKeys = () =>
@@ -437,7 +436,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		const ordered = orderKeys(next)
 		if (props.visibleColumns === undefined) {
 			setUncontrolledVisible(ordered)
-			saveVisibleKeys(storageKey, ordered)
+			saveJson(storageKey, ordered)
 		}
 		props.onVisibleColumnsChange?.(ordered)
 	}
@@ -474,10 +473,10 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	function resetColumns(): void {
 		setVisibleKeys(defaultVisibleKeys())
 		// Forget the saved choice so later changes to the defaults apply.
-		if (props.visibleColumns === undefined) saveVisibleKeys(storageKey, undefined)
+		if (props.visibleColumns === undefined) saveJson(storageKey, undefined)
 		setColumnOrder(completeOrder(props.defaultColumnOrder ?? []))
 		clearWidths()
-		props.onColumnWidthsChange?.({})
+		emitWidths()
 	}
 
 	// Pixel widths once resized; until then the browser lays out the columns.
@@ -523,15 +522,26 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	const actionsIndex = () => visibleColumns().length
 
-	createEffect(() => {
-		if (props.columnWidths === undefined) return
-		const restored = read(props.columnWidths)
-		if (Object.keys(restored).length === 0) {
+	/**
+	 * Pins `sizing`, or returns to automatic layout when it is empty. The actions
+	 * column is fitted the first time; the fit effect below fills visible columns
+	 * without a width.
+	 */
+	function restoreWidths(sizing: ColumnSizingState): void {
+		if (Object.keys(sizing).length === 0) {
 			clearWidths()
 			return
 		}
-		table.setColumnSizing(restored)
+		table.setColumnSizing(sizing)
 		setExtraWidth((extra) => extra ?? (props.rowActions ? fitColumn(untrack(actionsIndex)) : 0))
+	}
+
+	function emitWidths(): void {
+		props.onColumnWidthsChange?.(widths())
+	}
+
+	createEffect(() => {
+		if (props.columnWidths !== undefined) restoreWidths(read(props.columnWidths))
 	})
 
 	// Columns without a width, e.g. one that was re-shown or added since the widths were saved.
@@ -588,29 +598,32 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		const startWidth = sizing[key] ?? MIN_COLUMN_WIDTH
 		let moved = false
 
-		function onMove(e: PointerEvent): void {
-			if (!moved && Math.abs(e.clientX - startX) < 2) return
-			moved = true
-			const next = Math.max(MIN_COLUMN_WIDTH, startWidth + e.clientX - startX)
-			applyWidths({ ...sizing, [key]: next }, extra)
-		}
-		function onUp(): void {
-			handle.removeEventListener('pointermove', onMove)
-			handle.removeEventListener('pointerup', onUp)
-			handle.removeEventListener('pointercancel', onUp)
-			if (moved) props.onColumnWidthsChange?.(widths())
-		}
-		handle.addEventListener('pointermove', onMove)
-		handle.addEventListener('pointerup', onUp)
-		handle.addEventListener('pointercancel', onUp)
+		trackPointer(
+			handle,
+			(e) => {
+				if (!moved && Math.abs(e.clientX - startX) < 2) return
+				moved = true
+				const next = Math.max(MIN_COLUMN_WIDTH, startWidth + e.clientX - startX)
+				applyWidths({ ...sizing, [key]: next }, extra)
+			},
+			() => {
+				if (moved) emitWidths()
+			},
+		)
+	}
+
+	/** Pins the rendered widths with the column `key` resized by `width`, and reports them. */
+	function resizeColumn(key: string, width: (current: number) => number): void {
+		if (!tableRef) return
+		const { sizing, extra } = measureWidths(tableRef)
+		const next = Math.max(MIN_COLUMN_WIDTH, width(sizing[key] ?? MIN_COLUMN_WIDTH))
+		applyWidths({ ...sizing, [key]: next }, extra)
+		emitWidths()
 	}
 
 	function autofit(key: string): void {
-		if (!tableRef) return
 		const index = visibleColumns().findIndex((column) => column.key === key)
-		const { sizing, extra } = measureWidths(tableRef)
-		applyWidths({ ...sizing, [key]: Math.max(MIN_COLUMN_WIDTH, fitColumn(index)) }, extra)
-		props.onColumnWidthsChange?.(widths())
+		resizeColumn(key, () => fitColumn(index))
 	}
 
 	function resizeByKey(event: KeyboardEvent, key: string): void {
@@ -620,12 +633,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 			return
 		}
 		const step = event.key === 'ArrowLeft' ? -10 : event.key === 'ArrowRight' ? 10 : 0
-		if (!step || !tableRef) return
+		if (!step) return
 		event.preventDefault()
-		const { sizing, extra } = measureWidths(tableRef)
-		const current = sizing[key] ?? MIN_COLUMN_WIDTH
-		applyWidths({ ...sizing, [key]: Math.max(MIN_COLUMN_WIDTH, current + step) }, extra)
-		props.onColumnWidthsChange?.(widths())
+		resizeColumn(key, (current) => current + step)
 	}
 
 	/**
@@ -656,42 +666,26 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		}),
 	)
 
-	const savedLayouts = createMemo(() =>
-		props.savedLayouts !== undefined ? read(props.savedLayouts) : undefined,
-	)
-	/** The saved layout equal to the current one, checked in the menu. */
-	const currentSavedLayout = createMemo(() => {
-		const current = currentLayout()
-		return savedLayouts()?.find((saved) => sameLayout(normalizeLayout(saved.layout), current))
+	/** Saved layouts; the current one is checked in the menu. */
+	const layouts = createSavedEntries<DataTableSavedLayout>({
+		entries: () => (props.savedLayouts !== undefined ? read(props.savedLayouts) : undefined),
+		matches: (saved) => sameLayout(normalizeLayout(saved.layout), currentLayout()),
+		onChange: (saved) => props.onSavedLayoutsChange?.(saved),
 	})
-	const [namingLayout, setNamingLayout] = createSignal(false)
-	const [layoutName, setLayoutName] = createSignal('')
 
 	function applyLayout(name: string): void {
-		const saved = savedLayouts()?.find((s) => s.name === name)
+		const saved = layouts.find(name)
 		if (!saved) return
 		const layout = normalizeLayout(saved.layout)
 		setVisibleKeys(layout.visibleColumns)
 		setColumnOrder(layout.columnOrder)
-		if (Object.keys(layout.columnWidths).length === 0) {
-			clearWidths()
-			props.onColumnWidthsChange?.({})
-			return
-		}
-		table.setColumnSizing(layout.columnWidths)
-		// Fits the actions column, then the fit effect fills visible columns without a width.
-		setExtraWidth((extra) => extra ?? (props.rowActions ? fitColumn(actionsIndex()) : 0))
-		props.onColumnWidthsChange?.(widths())
+		restoreWidths(layout.columnWidths)
+		emitWidths()
 	}
 
-	/** Saves the current layout, replacing a saved layout of the same name. */
 	function saveLayout(event: SubmitEvent): void {
 		event.preventDefault()
-		const name = layoutName().trim()
-		if (name === '') return
-		const others = (savedLayouts() ?? []).filter((s) => s.name !== name)
-		props.onSavedLayoutsChange?.([...others, { name, layout: currentLayout() }])
-		closeLayoutMenu()
+		if (layouts.save((name) => ({ name, layout: currentLayout() }))) closeLayoutMenu()
 	}
 
 	const [draggedKey, setDraggedKey] = createSignal<string | undefined>()
@@ -713,7 +707,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	/** Opens the layout menu and focuses the checked item, else the first or last one. */
 	function openLayoutMenu(edge: 'first' | 'last'): void {
-		setNamingLayout(false)
+		layouts.setNaming(false)
 		setPopup('layouts')
 		const items = layoutItems()
 		const checked = items.find((item) => item.getAttribute('aria-checked') === 'true')
@@ -764,14 +758,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		closeLayoutMenu()
 	}
 
-	function startSavingLayout(): void {
-		setLayoutName(currentSavedLayout()?.name ?? '')
-		setNamingLayout(true)
-	}
-
 	createEffect(() => {
 		if (popup() === undefined || !showCustomizer()) {
-			setNamingLayout(false)
+			layouts.setNaming(false)
 			return
 		}
 		function onPointerDown(event: PointerEvent): void {
@@ -837,22 +826,20 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		if (e.pointerType === 'mouse') return
 		setDraggedKey(column.key)
 		// On the document: reordering may detach the grip, which ends pointer capture.
-		function onMove(event: PointerEvent): void {
-			const item = document
-				.elementFromPoint(event.clientX, event.clientY)
-				?.closest('.data-table-customizer-item')
-			if (!item?.parentElement) return
-			moveColumn(column.key, Array.prototype.indexOf.call(item.parentElement.children, item))
-		}
-		function onUp(): void {
-			document.removeEventListener('pointermove', onMove)
-			document.removeEventListener('pointerup', onUp)
-			document.removeEventListener('pointercancel', onUp)
-			setDraggedKey(undefined)
-		}
-		document.addEventListener('pointermove', onMove)
-		document.addEventListener('pointerup', onUp)
-		document.addEventListener('pointercancel', onUp)
+		trackPointer(
+			document,
+			(event) => {
+				const item = document
+					.elementFromPoint(event.clientX, event.clientY)
+					?.closest('.data-table-customizer-item')
+				if (!item?.parentElement) return
+				moveColumn(
+					column.key,
+					Array.prototype.indexOf.call(item.parentElement.children, item),
+				)
+			},
+			() => setDraggedKey(undefined),
+		)
 	}
 
 	function customizerItem(column: DataTableColumn<TRow>, index: () => number): JSX.Element {
@@ -926,7 +913,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	function layoutMenuItem(saved: DataTableSavedLayout): JSX.Element {
-		const checked = () => currentSavedLayout()?.name === saved.name
+		const checked = () => layouts.current()?.name === saved.name
 		return (
 			<button
 				type="button"
@@ -946,18 +933,22 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		)
 	}
 
+	const savedLayoutsLabel = () => props.savedLayoutsLabel ?? 'Saved layouts'
+	const saveLayoutLabel = () => props.saveLayoutLabel ?? 'Save layout'
+	const layoutNameLabel = () => props.layoutNameLabel ?? 'Layout name'
+
 	function layoutMenuContent(): JSX.Element {
 		return (
 			<div
 				ref={layoutMenu}
 				id={layoutMenuId}
 				role="menu"
-				aria-label={props.savedLayoutsLabel ?? 'Saved layouts'}
+				aria-label={savedLayoutsLabel()}
 				class="data-table-customizer-panel data-table-layout-menu"
 				onKeyDown={onLayoutMenuKeyDown}
 			>
-				<For each={savedLayouts() ?? []}>{layoutMenuItem}</For>
-				<Show when={(savedLayouts()?.length ?? 0) > 0}>
+				<For each={layouts.entries() ?? []}>{layoutMenuItem}</For>
+				<Show when={(layouts.entries()?.length ?? 0) > 0}>
 					<hr class="data-table-layout-separator" />
 				</Show>
 				<button
@@ -965,24 +956,23 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					role="menuitem"
 					class="data-table-layout-item"
 					tabindex="-1"
-					onClick={startSavingLayout}
+					onClick={layouts.startNaming}
 				>
 					<span class="data-table-layout-check" aria-hidden="true">
 						<IconDeviceFloppy size={14} />
 					</span>
-					{`${props.saveLayoutLabel ?? 'Save layout'}…`}
+					{`${saveLayoutLabel()}…`}
 				</button>
 			</div>
 		)
 	}
 
 	function layoutSaveDialog(): JSX.Element {
-		const saveLabel = () => props.saveLayoutLabel ?? 'Save layout'
 		return (
 			<div
 				id={layoutMenuId}
 				role="dialog"
-				aria-label={saveLabel()}
+				aria-label={saveLayoutLabel()}
 				class="data-table-customizer-panel"
 			>
 				<form
@@ -995,17 +985,17 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					}}
 				>
 					<input
-						ref={(el) => queueMicrotask(() => el.focus())}
+						ref={focusOnMount}
 						type="text"
-						aria-label={props.layoutNameLabel ?? 'Layout name'}
-						placeholder={props.layoutNameLabel ?? 'Layout name'}
-						value={layoutName()}
-						onInput={(e) => setLayoutName(e.currentTarget.value)}
+						aria-label={layoutNameLabel()}
+						placeholder={layoutNameLabel()}
+						value={layouts.name()}
+						onInput={(e) => layouts.setName(e.currentTarget.value)}
 					/>
 					<div class="data-table-customizer-actions">
 						<button type="submit">
 							<IconDeviceFloppy size={14} aria-hidden="true" />
-							{saveLabel()}
+							{saveLayoutLabel()}
 						</button>
 						<button type="button" onClick={closeLayoutMenu}>
 							{props.cancelLabel ?? 'Cancel'}
@@ -1022,7 +1012,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				ref={layoutTrigger}
 				type="button"
 				class="data-table-customizer-button data-table-layout-trigger"
-				aria-label={props.savedLayoutsLabel ?? 'Saved layouts'}
+				aria-label={savedLayoutsLabel()}
 				aria-haspopup="menu"
 				aria-expanded={layoutMenuOpen()}
 				aria-controls={layoutMenuId}
@@ -1035,7 +1025,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	function customizer(): JSX.Element {
-		const hasLayouts = () => savedLayouts() !== undefined
+		const hasLayouts = () => layouts.entries() !== undefined
 		return (
 			<div ref={customizerRoot} class="data-table-customizer">
 				<button
@@ -1052,7 +1042,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 				<Show when={hasLayouts()}>{layoutTriggerButton()}</Show>
 				<Show when={customizerOpen()}>{customizerPanel()}</Show>
 				<Show when={layoutMenuOpen()}>
-					<Show when={namingLayout()} fallback={layoutMenuContent()}>
+					<Show when={layouts.naming()} fallback={layoutMenuContent()}>
 						{layoutSaveDialog()}
 					</Show>
 				</Show>
@@ -1097,24 +1087,39 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		)
 	}
 
-	function bodyRow(row: TRow): JSX.Element {
+	/** A row's cells: one per visible column, the actions cell, and the filler once resized. */
+	function rowCells(
+		content: (column: DataTableColumn<TRow>) => JSX.Element,
+		actions: () => JSX.Element,
+	): JSX.Element {
 		return (
-			<tr>
+			<>
 				<For each={visibleColumns()}>
 					{(column) => (
 						<td class={column.class} style={columnStyle(column, widths()[column.key])}>
-							{cell(row, column)}
+							{content(column)}
 						</td>
 					)}
 				</For>
 				<Show when={props.rowActions}>
 					<td class="data-table-actions" style={actionsStyle()}>
-						{props.rowActions?.(row)}
+						{actions()}
 					</td>
 				</Show>
 				<Show when={resized()}>
 					<td class="data-table-filler" aria-hidden="true" />
 				</Show>
+			</>
+		)
+	}
+
+	function bodyRow(row: TRow): JSX.Element {
+		return (
+			<tr>
+				{rowCells(
+					(column) => cell(row, column),
+					() => props.rowActions?.(row),
+				)}
 			</tr>
 		)
 	}
@@ -1154,25 +1159,10 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	function skeletonRow(): JSX.Element {
+		const skeleton = () => <span class="data-table-skeleton" />
 		return (
 			// biome-ignore lint/a11y/noAriaHiddenOnFocusable: skeleton cells hold nothing focusable
-			<tr aria-hidden="true">
-				<For each={visibleColumns()}>
-					{(column) => (
-						<td class={column.class} style={columnStyle(column, widths()[column.key])}>
-							<span class="data-table-skeleton" />
-						</td>
-					)}
-				</For>
-				<Show when={props.rowActions}>
-					<td class="data-table-actions" style={actionsStyle()}>
-						<span class="data-table-skeleton" />
-					</td>
-				</Show>
-				<Show when={resized()}>
-					<td class="data-table-filler" />
-				</Show>
-			</tr>
+			<tr aria-hidden="true">{rowCells(skeleton, skeleton)}</tr>
 		)
 	}
 
@@ -1254,7 +1244,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		loading() && sortedRows().length === 0 && props.loadingContent === undefined
 
 	return (
-		<div class={`data-table-wrap${props.class ? ` ${props.class}` : ''}`}>
+		<div class={cx('data-table-wrap', props.class)}>
 			<Show when={showCustomizer() || toolbar.toArray().length > 0}>
 				<div class="data-table-toolbar">
 					<Show when={toolbar.toArray().length > 0}>

@@ -1,6 +1,7 @@
 import { IconSearch, IconX } from '@tabler/icons-solidjs'
 import type { JSX } from 'solid-js'
 import { onCleanup, onMount, Show } from 'solid-js'
+import { cx } from './utils'
 
 export interface SearchBarProps {
 	value: string
@@ -46,7 +47,7 @@ export function SearchBar(props: SearchBarProps): JSX.Element {
 	})
 
 	return (
-		<div class={props.class ? `search-bar ${props.class}` : 'search-bar'}>
+		<div class={cx('search-bar', props.class)}>
 			<IconSearch size={17} class="search-bar-icon" aria-hidden="true" />
 			<input
 				ref={input}

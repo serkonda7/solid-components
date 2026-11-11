@@ -25,6 +25,15 @@ import {
 } from 'solid-js'
 import { Combobox, type ComboboxOption, MultiCombobox } from './combobox'
 import { DataTable, type DataTableProps } from './data-table'
+import {
+	createSavedEntries,
+	cx,
+	focusOnMount,
+	isStringArray,
+	loadJson,
+	read,
+	saveJson,
+} from './utils'
 
 export type FilterTableFilterType = 'text' | 'select' | 'boolean' | 'number-range' | 'date-range'
 
@@ -138,44 +147,18 @@ function formatRange(min: string, max: string): string {
 	return min === '' && max === '' ? '' : `${min}${RANGE_SEPARATOR}${max}`
 }
 
-function read<T>(value: T | Accessor<T>): T {
-	return typeof value === 'function' ? (value as Accessor<T>)() : value
-}
-
 function isActive(value: FilterTableValue | undefined): value is FilterTableValue {
 	return Array.isArray(value) ? value.length > 0 : (value ?? '').trim() !== ''
 }
 
-/** Reads stored filter values; undefined when unset, corrupt, or storage is unavailable. */
-function loadFilterValues(key: string | undefined): FilterTableValues | undefined {
-	if (key === undefined) return undefined
-	try {
-		const raw = globalThis.localStorage?.getItem(key)
-		if (!raw) return undefined
-		const parsed: unknown = JSON.parse(raw)
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
-		const values: FilterTableValues = {}
-		for (const [name, value] of Object.entries(parsed)) {
-			if (
-				typeof value === 'string' ||
-				(Array.isArray(value) && value.every((v) => typeof v === 'string'))
-			) {
-				values[name] = value
-			}
-		}
-		return values
-	} catch {
-		return undefined
+/** The filter values in parsed JSON, skipping entries of the wrong type. */
+function parseFilterValues(parsed: unknown): FilterTableValues | undefined {
+	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
+	const values: FilterTableValues = {}
+	for (const [name, value] of Object.entries(parsed)) {
+		if (typeof value === 'string' || isStringArray(value)) values[name] = value
 	}
-}
-
-function saveFilterValues(key: string | undefined, values: FilterTableValues): void {
-	if (key === undefined) return
-	try {
-		globalThis.localStorage?.setItem(key, JSON.stringify(values))
-	} catch {
-		// Storage full or unavailable (private mode): the filters last for the session.
-	}
+	return values
 }
 
 /** `values` without the quick search and keys that are not in `keys`. */
@@ -186,6 +169,17 @@ function pickFilters(values: FilterTableValues, keys: readonly string[]): Filter
 		if (key !== QUICK_SEARCH_KEY && value !== undefined) next[key] = value
 	}
 	return next
+}
+
+/** The `stored` filters still in `keys`, keeping the quick search of `current`. */
+function restoreFilters(
+	stored: FilterTableValues,
+	current: FilterTableValues,
+	keys: readonly string[],
+): FilterTableValues {
+	const search = current[QUICK_SEARCH_KEY]
+	const restored = normalize(pickFilters(stored, keys))
+	return search === undefined ? restored : { ...restored, [QUICK_SEARCH_KEY]: search }
 }
 
 /** Drops inactive entries and trims text so equal filters compare equal. */
@@ -283,19 +277,23 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'class',
 	])
 	const rows = createMemo(() => read(local.rows))
+	const anyLabel = () => local.anyLabel ?? 'Any'
+	const yesLabel = () => local.yesLabel ?? 'Yes'
+	const noLabel = () => local.noLabel ?? 'No'
+	const saveLabel = () => local.saveLabel ?? 'Save'
+	const quickSearchLabel = () => local.quickSearchLabel ?? 'Quick search'
+	const savedFiltersLabel = () => local.savedFiltersLabel ?? 'Saved filters'
+	const saveNameLabel = () => local.saveNameLabel ?? 'Filter name'
 	// Read once: the key names a table, it is not expected to change.
 	const storageKey = untrack(() => local.filterStorageKey)
 	const filterKeys = () => local.filters.map((filter) => filter.key)
 	const stored = untrack(() =>
-		local.restoreFilters === false ? undefined : loadFilterValues(storageKey),
+		local.restoreFilters === false ? undefined : loadJson(storageKey, parseFilterValues),
 	)
 	const [internalValues, setInternalValues] = createSignal<FilterTableValues>(
 		untrack(() => {
 			const defaults = normalize(local.defaultFilterValues ?? {})
-			if (stored === undefined) return defaults
-			const search = defaults[QUICK_SEARCH_KEY]
-			const restored = normalize(pickFilters(stored, filterKeys()))
-			return search === undefined ? restored : { ...restored, [QUICK_SEARCH_KEY]: search }
+			return stored === undefined ? defaults : restoreFilters(stored, defaults, filterKeys())
 		}),
 	)
 	const values = createMemo(() =>
@@ -306,9 +304,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	untrack(() => {
 		if (stored === undefined || local.filterValues === undefined) return
 		const current = values()
-		const search = current[QUICK_SEARCH_KEY]
-		const restored = normalize(pickFilters(stored, filterKeys()))
-		const next = search === undefined ? restored : { ...restored, [QUICK_SEARCH_KEY]: search }
+		const next = restoreFilters(stored, current, filterKeys())
 		if (!sameValues(next, current)) local.onFilterValuesChange?.(next)
 	})
 
@@ -320,7 +316,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			pending ? { ...next, [QUICK_SEARCH_KEY]: searchInput() } : next,
 		)
 		if (local.filterValues === undefined) setInternalValues(normalized)
-		saveFilterValues(storageKey, pickFilters(normalized, filterKeys()))
+		saveJson(storageKey, pickFilters(normalized, filterKeys()))
 		local.onFilterValuesChange?.(normalized)
 	}
 
@@ -480,7 +476,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 
 	function optionLabel(filter: FilterTableFilter<TRow>, value: string): string {
 		if (filter.type === 'boolean') {
-			return value === 'true' ? (local.yesLabel ?? 'Yes') : (local.noLabel ?? 'No')
+			return value === 'true' ? yesLabel() : noLabel()
 		}
 		if (filter.type === 'number-range' || filter.type === 'date-range') {
 			return rangeLabel(filter, value)
@@ -511,38 +507,29 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		setValues({ [QUICK_SEARCH_KEY]: quickSearch() })
 	}
 
-	const savedFilters = createMemo(() =>
-		local.savedFilters !== undefined ? read(local.savedFilters) : undefined,
-	)
-	/** The saved filter equal to the applied values, shown as the picker's selection. */
-	const currentSaved = createMemo(() =>
-		savedFilters()?.find((saved) => sameValues(normalize(saved.values), values())),
-	)
-	const [naming, setNaming] = createSignal(false)
-	const [savedName, setSavedName] = createSignal('')
+	/** Saved filters; the one equal to the applied values is the picker's selection. */
+	const saved = createSavedEntries<FilterTableSavedFilter>({
+		entries: () => (local.savedFilters !== undefined ? read(local.savedFilters) : undefined),
+		matches: (entry) => sameValues(normalize(entry.values), values()),
+		onChange: (entries) => local.onSavedFiltersChange?.(entries),
+	})
 
 	function applySaved(name: string): void {
-		const saved = savedFilters()?.find((s) => s.name === name)
-		if (!saved) return
+		const entry = saved.find(name)
+		if (!entry) return
 		cancelSearch()
-		setSearchInput(asText(saved.values[QUICK_SEARCH_KEY]))
-		setValues(saved.values)
+		setSearchInput(asText(entry.values[QUICK_SEARCH_KEY]))
+		setValues(entry.values)
 	}
 
 	function startSaving(): void {
 		flushSearch()
-		setSavedName(currentSaved()?.name ?? '')
-		setNaming(true)
+		saved.startNaming()
 	}
 
-	/** Saves the applied values, replacing a saved filter of the same name. */
 	function save(event: SubmitEvent): void {
 		event.preventDefault()
-		const name = savedName().trim()
-		if (name === '') return
-		const others = (savedFilters() ?? []).filter((s) => s.name !== name)
-		local.onSavedFiltersChange?.([...others, { name, values: values() }])
-		setNaming(false)
+		if (saved.save((name) => ({ name, values: values() }))) saved.setNaming(false)
 	}
 
 	// The form edits a draft that is applied on submit.
@@ -611,7 +598,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				values={selected()}
 				onChange={(values) => setDraftValue(filter.key, values)}
 				options={options(filter)}
-				placeholder={filter.placeholder ?? local.anyLabel ?? 'Any'}
+				placeholder={filter.placeholder ?? anyLabel()}
 				removeLabel={(label) => `${local.removeLabel ?? 'Remove'} ${label}`}
 			/>
 		)
@@ -678,10 +665,10 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					id={fieldId(filter.key)}
 					value={asText(draftValue(filter.key))}
 					onChange={(value) => setDraftValue(filter.key, value)}
-					emptyLabel={local.anyLabel ?? 'Any'}
+					emptyLabel={anyLabel()}
 					options={[
-						{ value: 'true', label: local.yesLabel ?? 'Yes' },
-						{ value: 'false', label: local.noLabel ?? 'No' },
+						{ value: 'true', label: yesLabel() },
+						{ value: 'false', label: noLabel() },
 					]}
 				/>
 			)
@@ -696,8 +683,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				<input
 					type="search"
 					class="filter-table-input"
-					aria-label={local.quickSearchLabel ?? 'Quick search'}
-					placeholder={local.quickSearchLabel ?? 'Quick search'}
+					aria-label={quickSearchLabel()}
+					placeholder={quickSearchLabel()}
 					value={searchInput()}
 					onInput={(e) => onSearchInput(e.currentTarget.value)}
 					onKeyDown={(e) => {
@@ -712,18 +699,18 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		return (
 			<div class="filter-table-saved">
 				<Combobox
-					value={currentSaved()?.name ?? ''}
+					value={saved.current()?.name ?? ''}
 					onChange={applySaved}
-					options={(savedFilters() ?? []).map((s) => ({ value: s.name, label: s.name }))}
-					ariaLabel={local.savedFiltersLabel ?? 'Saved filters'}
-					placeholder={local.savedFiltersLabel ?? 'Saved filters'}
+					options={(saved.entries() ?? []).map((s) => ({ value: s.name, label: s.name }))}
+					ariaLabel={savedFiltersLabel()}
+					placeholder={savedFiltersLabel()}
 				/>
-				<Show when={currentSaved()}>
-					{(saved) => (
+				<Show when={saved.current()}>
+					{(current) => (
 						<button
 							type="button"
 							class="filter-table-chip-remove"
-							aria-label={`${local.clearSavedFilterLabel ?? 'Clear saved filter'} ${saved().name}`}
+							aria-label={`${local.clearSavedFilterLabel ?? 'Clear saved filter'} ${current().name}`}
 							onClick={clearFilters}
 						>
 							<IconX size={14} aria-hidden="true" />
@@ -763,7 +750,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 						{local.clearAllLabel ?? 'Clear all'}
 					</button>
 				</li>
-				<Show when={savedFilters() !== undefined && !naming()}>
+				<Show when={saved.entries() !== undefined && !saved.naming()}>
 					<li>
 						<button
 							type="button"
@@ -771,7 +758,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 							onClick={startSaving}
 						>
 							<IconDeviceFloppy size={12} aria-hidden="true" />
-							{local.saveLabel ?? 'Save'}
+							{saveLabel()}
 						</button>
 					</li>
 				</Show>
@@ -785,23 +772,27 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				class="filter-table-save"
 				onSubmit={save}
 				onKeyDown={(e) => {
-					if (e.key === 'Escape') setNaming(false)
+					if (e.key === 'Escape') saved.setNaming(false)
 				}}
 			>
 				<input
-					ref={(el) => queueMicrotask(() => el.focus())}
+					ref={focusOnMount}
 					type="text"
 					class="filter-table-input"
-					aria-label={local.saveNameLabel ?? 'Filter name'}
-					placeholder={local.saveNameLabel ?? 'Filter name'}
-					value={savedName()}
-					onInput={(e) => setSavedName(e.currentTarget.value)}
+					aria-label={saveNameLabel()}
+					placeholder={saveNameLabel()}
+					value={saved.name()}
+					onInput={(e) => saved.setName(e.currentTarget.value)}
 				/>
 				<button type="submit" class="filter-table-button filter-table-button-primary">
 					<IconDeviceFloppy size={16} aria-hidden="true" />
-					{local.saveLabel ?? 'Save'}
+					{saveLabel()}
 				</button>
-				<button type="button" class="filter-table-button" onClick={() => setNaming(false)}>
+				<button
+					type="button"
+					class="filter-table-button"
+					onClick={() => saved.setNaming(false)}
+				>
 					{local.cancelLabel ?? 'Cancel'}
 				</button>
 			</form>
@@ -811,9 +802,9 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	const toolbar = (
 		<div class="filter-table-toolbar">
 			<Show when={local.quickSearch !== false}>{quickSearchBox()}</Show>
-			<Show when={(savedFilters()?.length ?? 0) > 0}>{savedPicker()}</Show>
+			<Show when={(saved.entries()?.length ?? 0) > 0}>{savedPicker()}</Show>
 			<Show when={pills().length > 0}>{pillList()}</Show>
-			<Show when={naming() && pills().length > 0}>{saveForm()}</Show>
+			<Show when={saved.naming() && pills().length > 0}>{saveForm()}</Show>
 		</div>
 	)
 
@@ -892,7 +883,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	}
 
 	return (
-		<div class={`filter-table${local.class ? ` ${local.class}` : ''}`}>
+		<div class={cx('filter-table', local.class)}>
 			<div class="filter-table-tabs" role="tablist">
 				<For each={tabs}>{tabButton}</For>
 			</div>

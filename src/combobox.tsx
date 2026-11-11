@@ -11,6 +11,7 @@ import {
 	splitProps,
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
+import { cx } from './utils'
 
 /** Icon component rendered before an option label, e.g. one from `@tabler/icons-solidjs`. */
 export type ComboboxIcon = Component<{ size?: number }>
@@ -465,9 +466,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 		<div
 			// `multiple` never changes, so it goes in `class`: a reactive `class`
 			// would wipe a static `classList` entry.
-			class={[multiple ? 'combobox combobox-multiple' : 'combobox', props.class]
-				.filter(Boolean)
-				.join(' ')}
+			class={cx('combobox', multiple && 'combobox-multiple', props.class)}
 			classList={{
 				'combobox-open': open(),
 				'combobox-with-detail': !open() && Boolean(selected()?.detail),
