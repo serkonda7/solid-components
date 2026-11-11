@@ -23,7 +23,7 @@ import {
 	splitProps,
 	untrack,
 } from 'solid-js'
-import { Combobox, type ComboboxOption } from './combobox'
+import { Combobox, type ComboboxOption, MultiCombobox } from './combobox'
 import { DataTable, type DataTableProps } from './data-table'
 
 export type FilterTableFilterType = 'text' | 'select' | 'boolean' | 'number-range' | 'date-range'
@@ -112,6 +112,8 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	saveNameLabel?: string
 	cancelLabel?: string
 	clearSavedFilterLabel?: string
+	/** Prefix of a selected chip's remove button name in `select` filters. Defaults to `Remove`. */
+	removeLabel?: string
 }
 
 const QUICK_SEARCH_KEY = 'q'
@@ -277,6 +279,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'saveNameLabel',
 		'cancelLabel',
 		'clearSavedFilterLabel',
+		'removeLabel',
 		'class',
 	])
 	const rows = createMemo(() => read(local.rows))
@@ -602,41 +605,15 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			const value = draftValue(filter.key)
 			return Array.isArray(value) ? value : []
 		}
-		const chip = (value: string): JSX.Element => (
-			<li class="filter-table-chip">
-				{optionLabel(filter, value)}
-				<button
-					type="button"
-					class="filter-table-chip-remove"
-					aria-label={`Remove ${optionLabel(filter, value)}`}
-					onClick={() =>
-						setDraftValue(
-							filter.key,
-							selected().filter((v) => v !== value),
-						)
-					}
-				>
-					<IconX size={12} aria-hidden="true" />
-				</button>
-			</li>
-		)
 		return (
-			<div class="filter-table-multi">
-				<Combobox
-					id={fieldId(filter.key)}
-					value=""
-					onChange={(value) => setDraftValue(filter.key, [...selected(), value])}
-					options={options(filter).filter(
-						(option) => !selected().includes(String(option.value)),
-					)}
-					placeholder={filter.placeholder ?? local.anyLabel ?? 'Any'}
-				/>
-				<Show when={selected().length > 0}>
-					<ul class="filter-table-chips">
-						<For each={selected()}>{chip}</For>
-					</ul>
-				</Show>
-			</div>
+			<MultiCombobox
+				id={fieldId(filter.key)}
+				values={selected()}
+				onChange={(values) => setDraftValue(filter.key, values)}
+				options={options(filter)}
+				placeholder={filter.placeholder ?? local.anyLabel ?? 'Any'}
+				removeLabel={(label) => `${local.removeLabel ?? 'Remove'} ${label}`}
+			/>
 		)
 	}
 

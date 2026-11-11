@@ -473,7 +473,7 @@ test('derived select options survive manually filtered rows', () => {
 	const category = input(container, 'Category')
 	type(category, 'light')
 	press(category, 'Enter')
-	expect(container.querySelector('.filter-table-chip')?.textContent).toBe('Lighting')
+	expect(container.querySelector('.combobox-chip')?.textContent).toBe('Lighting')
 })
 
 test('derived select options follow the rows without manual filtering', () => {
@@ -497,7 +497,7 @@ test('derived select options follow the rows without manual filtering', () => {
 	const category = input(container, 'Category')
 	type(category, 'light')
 	press(category, 'Enter')
-	expect(container.querySelector('.filter-table-chip')).toBeNull()
+	expect(container.querySelector('.combobox-chip')).toBeNull()
 })
 
 test('results badge prefers totalCount, then pagination, then the shown rows', () => {

@@ -12,6 +12,7 @@ import {
 	type FilterTableSavedFilter,
 	type FilterTableValues,
 	Modal,
+	MultiCombobox,
 	SearchBar,
 } from '../src'
 import { type Device, deviceColumns, deviceFilters, devices } from './devices'
@@ -196,6 +197,7 @@ export default function App() {
 	const [empty, setEmpty] = createSignal(false)
 	const [product, setProduct] = createSignal('')
 	const [added, setAdded] = createSignal<string>()
+	const [productSet, setProductSet] = createSignal<string[]>([])
 	const [search, setSearch] = createSignal('')
 	const [color, setColor] = createSignal('#3b82f6')
 	const [modalOpen, setModalOpen] = createSignal(false)
@@ -406,6 +408,26 @@ export default function App() {
 									{' '}
 									· Add requested with name <code>{added() || '(empty)'}</code>
 								</Show>
+							</p>
+						</section>
+
+						<h2>MultiCombobox</h2>
+						<p>
+							Picked products show as chips and leave the list, which stays open for
+							the next pick. Backspace in the empty search removes the last chip.
+						</p>
+
+						<section class="combobox-demo">
+							<label for="products-combobox">Products</label>
+							<MultiCombobox
+								id="products-combobox"
+								values={productSet()}
+								onChange={setProductSet}
+								options={productOptions}
+								placeholder="Any product"
+							/>
+							<p>
+								Selected values: <code>{JSON.stringify(productSet())}</code>
 							</p>
 						</section>
 					</Match>

@@ -158,7 +158,8 @@ const filters: FilterTableFilter<Device>[] = [
 - Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`,
   `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
   `fromLabel`, `toLabel`, `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
-  `clearSavedFilterLabel`.
+  `clearSavedFilterLabel`, `removeLabel` (chip remove prefix).
+- `select` filters use `MultiCombobox`: the picked values show as chips inside the field.
 
 ## Combobox
 
@@ -189,6 +190,24 @@ or pass `ariaLabel`.
 - Texts: `placeholder`, `searchLabel` (`Search`), `noMatchesLabel`
   (`No matching objects`), `addLabel` (`Add`).
 - The value is mirrored in the input's `data-value`.
+
+### MultiCombobox
+
+Same props as `Combobox` minus `value`/`emptyLabel`, with `values: string[]` and
+`onChange(values)`. Picked options show as removable chips inside the control and
+leave the list, which stays open for the next pick. Backspace in the empty search
+removes the last chip; Tab only closes the list. `removeLabel(label)` names a chip's
+remove button (default `Remove <label>`).
+
+```tsx
+<MultiCombobox
+  id="tags"
+  values={tagIds()}
+  onChange={setTagIds}
+  options={tags().map((t) => ({ value: t.id, label: t.name }))}
+  placeholder="Any"
+/>
+```
 
 ## SearchBar
 
@@ -321,6 +340,10 @@ condition, which resolves to the source barrel (~6000 dev requests).
 - Options `preventDefault` on `mousedown` so input blur doesn't close the list
   before the click lands.
 - `onInput` reads the typed value before opening: opening resets the bound value.
+- `Combobox` and `MultiCombobox` share `ComboboxCore`; `multiple` is read once, so
+  the mode can't change on a mounted instance.
+- Chip remove buttons and the multi control `preventDefault` on `mousedown` (outside
+  the input) so focus and the open list survive the click.
 
 ### SearchBar (`src/search-bar.tsx`)
 - The `document` keydown listener ignores Shift/Alt combinations so it doesn't
@@ -339,7 +362,7 @@ from the consumer; don't set it here.
 - `--data-table-*`: `border`, `bg`, `header-bg`, `row-hover-bg`, `skeleton-bg`,
   `max-height`, `customizer-bg`, `customizer-hover-bg`, `panel-bg`
 - `--filter-table-*`: `border`, `bg`, `muted`, `accent`, `pill-bg`
-- `--combobox-*`: `border`, `bg`, `panel-bg`, `hover-bg`, `muted`, `accent`
+- `--combobox-*`: `border`, `bg`, `panel-bg`, `hover-bg`, `muted`, `accent`, `chip-bg`
 - `--search-bar-*`: `border`, `bg`, `muted`, `hover-bg`
 - `--color-input-*`: `border`, `bg`
 

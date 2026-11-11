@@ -1,4 +1,4 @@
-import { IconChevronDown, IconPlus } from '@tabler/icons-solidjs'
+import { IconChevronDown, IconPlus, IconX } from '@tabler/icons-solidjs'
 import type { Component, JSX } from 'solid-js'
 import {
 	createEffect,
@@ -8,6 +8,7 @@ import {
 	For,
 	onMount,
 	Show,
+	splitProps,
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 
@@ -26,16 +27,11 @@ export interface ComboboxOption {
 	preview?: Component
 }
 
-export interface ComboboxProps {
+/** Props shared by `Combobox` and `MultiCombobox`. */
+export interface ComboboxBaseProps {
 	/** Input id, for pairing with an external `<label for>`. Generated when omitted. */
 	id?: string
-	/** Selected option value as a string; `''` means nothing (or the empty entry) is selected. */
-	value: string
-	/** Omitted on read-only comboboxes. */
-	onChange?: (value: string) => void
 	options: ComboboxOption[]
-	/** Label of the empty (`''`) first entry; omit for no empty choice. */
-	emptyLabel?: string
 	required?: boolean
 	disabled?: boolean
 	autofocus?: boolean
@@ -61,6 +57,36 @@ export interface ComboboxProps {
 	class?: string
 }
 
+export interface ComboboxProps extends ComboboxBaseProps {
+	/** Selected option value as a string; `''` means nothing (or the empty entry) is selected. */
+	value: string
+	/** Omitted on read-only comboboxes. */
+	onChange?: (value: string) => void
+	/** Label of the empty (`''`) first entry; omit for no empty choice. */
+	emptyLabel?: string
+}
+
+export interface MultiComboboxProps extends ComboboxBaseProps {
+	/** Selected option values as strings, in the order they were picked. */
+	values: string[]
+	/** Omitted on read-only comboboxes. */
+	onChange?: (values: string[]) => void
+	/** Accessible name of a chip's remove button. Defaults to `Remove <label>`. */
+	removeLabel?: (label: string) => string
+}
+
+/** Internal props: single mode passes `value`, multi mode `multiple` and `values`. */
+interface ComboboxCoreProps extends ComboboxBaseProps {
+	multiple?: boolean
+	value: string
+	values?: string[]
+	/** Single mode: the new value. Multi mode: the value to add. */
+	onChange?: (value: string) => void
+	onRemove?: (value: string) => void
+	emptyLabel?: string
+	removeLabel?: (label: string) => string
+}
+
 /**
  * Searchable dropdown of `options`, with an optional leading empty choice.
  * A text combobox: typing filters the options by label and detail, arrow keys
@@ -69,6 +95,35 @@ export interface ComboboxProps {
  * the value sits in `data-value`.
  */
 export function Combobox(props: ComboboxProps): JSX.Element {
+	return ComboboxCore(props)
+}
+
+/**
+ * Searchable multi-select: the picked options show as removable chips inside
+ * the control, in front of the search input. Picking keeps the list open for
+ * the next choice and leaves picked options out of it; Backspace in the empty
+ * input removes the last chip. Keys otherwise work as in `Combobox`, except
+ * that Tab only closes the list.
+ */
+export function MultiCombobox(props: MultiComboboxProps): JSX.Element {
+	const [local, rest] = splitProps(props, ['values', 'onChange'])
+	return (
+		<ComboboxCore
+			{...rest}
+			multiple
+			value=""
+			values={local.values}
+			onChange={
+				local.onChange ? (value) => local.onChange?.([...local.values, value]) : undefined
+			}
+			onRemove={(value) => local.onChange?.(local.values.filter((v) => v !== value))}
+		/>
+	)
+}
+
+function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
+	// Fixed per instance: the two modes render different markup.
+	const multiple = props.multiple === true
 	let input: HTMLInputElement | undefined
 	let list: HTMLDivElement | undefined
 	const fallbackId = createUniqueId()
@@ -81,14 +136,22 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	// Last pointer position over the list; cleared by keyboard navigation.
 	const [cursor, setCursor] = createSignal<{ x: number; y: number }>()
 
-	const choices = createMemo((): ComboboxOption[] =>
-		props.emptyLabel === undefined
+	const values = (): string[] => props.values ?? []
+	const choices = createMemo((): ComboboxOption[] => {
+		if (multiple) {
+			return props.options.filter((o) => !values().includes(String(o.value)))
+		}
+		return props.emptyLabel === undefined
 			? props.options
-			: [{ value: '', label: props.emptyLabel }, ...props.options],
-	)
+			: [{ value: '', label: props.emptyLabel }, ...props.options]
+	})
 	const selected = createMemo(() =>
-		props.value === '' ? undefined : choices().find((o) => String(o.value) === props.value),
+		multiple || props.value === ''
+			? undefined
+			: choices().find((o) => String(o.value) === props.value),
 	)
+	const optionOf = (value: string): ComboboxOption | undefined =>
+		props.options.find((o) => String(o.value) === value)
 	const filtered = createMemo((): ComboboxOption[] => {
 		const needle = query().trim().toLowerCase()
 		return needle === ''
@@ -133,15 +196,30 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	}
 
 	function pick(index: number): void {
-		setOpen(false)
 		if (props.onAdd && index === addIndex()) {
+			setOpen(false)
 			props.onAdd(query().trim())
 			return
 		}
 		const option = filtered()[index]
+		if (multiple) {
+			// Stay open for the next pick; the picked option leaves the list.
+			if (option) {
+				setQuery('')
+				props.onChange?.(String(option.value))
+				setActive(Math.min(index, Math.max(count() - 1, 0)))
+			}
+			return
+		}
+		setOpen(false)
 		if (option && String(option.value) !== props.value) {
 			props.onChange?.(String(option.value))
 		}
+	}
+
+	function remove(value: string): void {
+		props.onRemove?.(value)
+		setActive((current) => Math.min(current, Math.max(count() - 1, 0)))
 	}
 
 	function step(delta: number): void {
@@ -154,6 +232,14 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 	}
 
 	function onKeyDown(e: KeyboardEvent): void {
+		if (multiple && e.key === 'Backspace' && editable() && query() === '') {
+			const last = values().at(-1)
+			if (last !== undefined) {
+				e.preventDefault()
+				remove(last)
+			}
+			return
+		}
 		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 			e.preventDefault()
 			setCursor(undefined)
@@ -168,8 +254,9 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 			pick(active())
 		} else if (e.key === 'Tab') {
 			// Like Enter, but focus moves on to the next field. The add entry
-			// navigates away, so Tab just closes the list there.
-			if (props.onAdd && active() === addIndex()) {
+			// navigates away, so Tab just closes the list there. A multi-select
+			// stays open after picks, so Tab only closes it.
+			if (multiple || (props.onAdd && active() === addIndex())) {
 				setOpen(false)
 			} else {
 				pick(active())
@@ -181,10 +268,15 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 		}
 	}
 
-	const placeholder = (): string | undefined =>
-		open()
+	const placeholder = (): string | undefined => {
+		if (multiple) {
+			if (values().length > 0) return undefined
+			return open() ? (props.searchLabel ?? 'Search') : props.placeholder
+		}
+		return open()
 			? (selected()?.label ?? props.emptyLabel ?? props.searchLabel ?? 'Search')
 			: (props.emptyLabel ?? props.placeholder)
+	}
 
 	function optionRow(option: ComboboxOption, index: () => number): JSX.Element {
 		return (
@@ -194,7 +286,7 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 				id={optionId(index())}
 				data-index={index()}
 				role="option"
-				aria-selected={String(option.value) === props.value}
+				aria-selected={!multiple && String(option.value) === props.value}
 				classList={{
 					'combobox-option': true,
 					'combobox-option-active': index() === active(),
@@ -246,6 +338,97 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 		)
 	}
 
+	const field = (
+		<input
+			id={id()}
+			ref={input}
+			class="combobox-input"
+			role="combobox"
+			aria-expanded={open()}
+			aria-controls={listId()}
+			aria-autocomplete="list"
+			aria-activedescendant={open() && count() > 0 ? optionId(active()) : undefined}
+			aria-label={props.ariaLabel}
+			aria-describedby={props.describedBy}
+			autocomplete="off"
+			// The chips, not the search text, satisfy a required multi-select.
+			required={props.required && (!multiple || values().length === 0)}
+			disabled={props.disabled}
+			readOnly={props.onChange === undefined}
+			data-value={multiple ? undefined : props.value}
+			placeholder={placeholder()}
+			value={open() ? query() : multiple ? '' : (selected()?.label ?? '')}
+			onClick={show}
+			onInput={(e) => {
+				// Read first: opening resets the bound input value to the empty query.
+				const text = e.currentTarget.value
+				show()
+				setQuery(text)
+				setActive(0)
+			}}
+			onKeyDown={onKeyDown}
+			onBlur={() => setOpen(false)}
+		/>
+	)
+
+	function chip(value: string): JSX.Element {
+		const label = (): string => optionOf(value)?.label ?? value
+		return (
+			<li class="combobox-chip">
+				<Show when={optionOf(value)?.icon}>
+					{(icon) => (
+						<span class="combobox-chip-icon" aria-hidden="true">
+							<Dynamic component={icon()} size={12} />
+						</span>
+					)}
+				</Show>
+				{label()}
+				<Show when={editable()}>
+					<button
+						type="button"
+						class="combobox-chip-remove"
+						aria-label={props.removeLabel?.(label()) ?? `Remove ${label()}`}
+						// Keep focus (and an open list) where it is.
+						onMouseDown={(e) => e.preventDefault()}
+						onClick={(e) => {
+							e.stopPropagation()
+							remove(value)
+						}}
+					>
+						<IconX size={12} aria-hidden="true" />
+					</button>
+				</Show>
+			</li>
+		)
+	}
+
+	/** Multi mode: chips and the search input share one bordered box. */
+	function control(): JSX.Element {
+		return (
+			// biome-ignore lint/a11y/useKeyWithClickEvents: the input inside handles the keyboard
+			// biome-ignore lint/a11y/noStaticElementInteractions: forwards clicks on chips and padding to the input
+			<div
+				class="combobox-control"
+				classList={{ 'combobox-control-disabled': props.disabled === true }}
+				// Outside the input, keep focus where it is instead of blurring it.
+				onMouseDown={(e) => {
+					if (e.target !== input) e.preventDefault()
+				}}
+				onClick={() => {
+					input?.focus()
+					show()
+				}}
+			>
+				<Show when={values().length > 0}>
+					<ul class="combobox-chips">
+						<For each={values()}>{chip}</For>
+					</ul>
+				</Show>
+				{field}
+			</div>
+		)
+	}
+
 	const cursorPreview = (): { x: number; y: number } | undefined =>
 		props.previewAtCursor === true ? cursor() : undefined
 
@@ -280,42 +463,18 @@ export function Combobox(props: ComboboxProps): JSX.Element {
 
 	return (
 		<div
-			class={props.class ? `combobox ${props.class}` : 'combobox'}
+			// `multiple` never changes, so it goes in `class`: a reactive `class`
+			// would wipe a static `classList` entry.
+			class={[multiple ? 'combobox combobox-multiple' : 'combobox', props.class]
+				.filter(Boolean)
+				.join(' ')}
 			classList={{
 				'combobox-open': open(),
 				'combobox-with-detail': !open() && Boolean(selected()?.detail),
 				'combobox-with-icon': !open() && selected()?.icon !== undefined,
 			}}
 		>
-			<input
-				id={id()}
-				ref={input}
-				class="combobox-input"
-				role="combobox"
-				aria-expanded={open()}
-				aria-controls={listId()}
-				aria-autocomplete="list"
-				aria-activedescendant={open() && count() > 0 ? optionId(active()) : undefined}
-				aria-label={props.ariaLabel}
-				aria-describedby={props.describedBy}
-				autocomplete="off"
-				required={props.required}
-				disabled={props.disabled}
-				readOnly={props.onChange === undefined}
-				data-value={props.value}
-				placeholder={placeholder()}
-				value={open() ? query() : (selected()?.label ?? '')}
-				onClick={show}
-				onInput={(e) => {
-					// Read first: opening resets the bound input value to the empty query.
-					const text = e.currentTarget.value
-					show()
-					setQuery(text)
-					setActive(0)
-				}}
-				onKeyDown={onKeyDown}
-				onBlur={() => setOpen(false)}
-			/>
+			{multiple ? control() : field}
 			<Show when={!open() && selected()?.icon}>
 				{(icon) => (
 					<span class="combobox-icon" aria-hidden="true">

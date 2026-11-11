@@ -11,9 +11,12 @@ export {
 } from './color-input'
 export {
 	Combobox,
+	type ComboboxBaseProps,
 	type ComboboxIcon,
 	type ComboboxOption,
 	type ComboboxProps,
+	MultiCombobox,
+	type MultiComboboxProps,
 } from './combobox'
 export {
 	DataTable,
