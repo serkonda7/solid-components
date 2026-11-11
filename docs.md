@@ -47,6 +47,31 @@ drag or Alt+ArrowUp/Down.
 - Labels: `columnCustomizerLabel`, `columnCustomizerTitle`,
   `columnCustomizerShowAllLabel`, `columnCustomizerResetLabel`.
 
+### Saved layouts
+Pass `savedLayouts` (`{ name, layout }[]`, even `[]`) + `onSavedLayoutsChange` to add
+a small arrow beside the "Columns" button (needs `showColumnCustomizer`). It opens a
+menu (`role="menu"`): one `menuitemradio` per saved layout, the current one checked,
+then "Save layout…", which turns the popup into a name form.
+
+- Keyboard: ArrowDown/Up on the arrow opens the menu on the checked (else first/last)
+  item; arrows wrap, Home/End jump, Escape closes and refocuses the arrow, Tab closes.
+  Picking or saving also returns focus to the arrow.
+- The column panel and the layout menu are one popup slot: opening one closes the other.
+
+- `layout` is `DataTableLayout`: `{ visibleColumns, columnOrder, columnWidths? }`,
+  i.e. the visible toggleable keys, every key in order, and pixel widths (rounded,
+  visible columns only; `{}` while the browser lays out the columns). Sorting is
+  not part of a layout.
+- Picking one applies it through the usual setters, so `onVisibleColumnsChange`,
+  `onColumnOrderChange` and `onColumnWidthsChange` fire and `storageKey` saves it.
+  Unknown keys are ignored, missing columns are appended, visible columns without a
+  width are fitted.
+- The menu checks the saved layout equal to the current one, if any. Saving
+  replaces an entry of the same name; persistence and deletion are up to the consumer.
+- Texts: `savedLayoutsLabel` (names the arrow and the menu), `saveLayoutLabel`,
+  `layoutNameLabel`, `cancelLabel`
+  (`FilterTable` forwards its `cancelLabel`).
+
 ### Column widths
 `resizableColumns` adds handles: drag, ArrowLeft/Right, or double-click/Enter to
 fit content.
@@ -322,7 +347,11 @@ condition, which resolves to the source barrel (~6000 dev requests).
 - Empty shows only when `!loading && (empty ?? rows.length === 0)`.
 - The toolbar row shows when `toolbar` or the customizer is present.
 - The customizer panel dismisses on outside `pointerdown` and `Escape`; keep both
-  listeners paired, with cleanup.
+  listeners paired, with cleanup. The layout menu shares them through the single
+  `popup` signal; its own Escape handling (menu, name form) `preventDefault`s, which
+  the document listener respects.
+- Saved layouts compare via `normalizeLayout` (known keys, completed order, rounded
+  widths of visible columns), so both sides of a match must go through it.
 
 ### FilterTable (`src/filter-table.tsx`)
 - Filtering runs in a headless TanStack table with one column per filter, plus a

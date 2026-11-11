@@ -1,4 +1,11 @@
-import { IconChevronDown, IconChevronLeft, IconChevronRight, IconMenu } from '@tabler/icons-solidjs'
+import {
+	IconCheck,
+	IconChevronDown,
+	IconChevronLeft,
+	IconChevronRight,
+	IconDeviceFloppy,
+	IconMenu,
+} from '@tabler/icons-solidjs'
 import {
 	type ColumnDef,
 	type ColumnSizingState,
@@ -53,6 +60,22 @@ export interface DataTableColumn<TRow> {
 	defaultVisible?: boolean
 	/** Whether the column can be hidden via the column customizer. Defaults to `true`. Non-toggleable columns are always shown. */
 	toggleable?: boolean
+}
+
+/** The column setup a saved layout restores. */
+export interface DataTableLayout {
+	/** Visible toggleable columns; `toggleable: false` columns are always shown. */
+	visibleColumns: string[]
+	/** Every column in display order; missing columns are appended. */
+	columnOrder: string[]
+	/** Pixel widths by column key; empty or omitted for automatic layout. */
+	columnWidths?: Record<string, number>
+}
+
+/** A named column layout the user saved for reuse. */
+export interface DataTableSavedLayout {
+	name: string
+	layout: DataTableLayout
 }
 
 export interface DataTablePagination {
@@ -115,6 +138,22 @@ export interface DataTableProps<TRow> {
 	columnCustomizerTitle?: string
 	columnCustomizerShowAllLabel?: string
 	columnCustomizerResetLabel?: string
+	/**
+	 * Saved column layouts (visibility, order, widths), listed in a menu opened by
+	 * an arrow beside the column customizer button. Passing this (even `[]`)
+	 * enables saving: "Save layout" names the current layout and emits the new
+	 * list through `onSavedLayoutsChange`; persisting it is up to you.
+	 */
+	savedLayouts?: DataTableSavedLayout[] | Accessor<DataTableSavedLayout[]>
+	onSavedLayoutsChange?: (savedLayouts: DataTableSavedLayout[]) => void
+	/** Names the layout menu and its trigger. Defaults to `Saved layouts`. */
+	savedLayoutsLabel?: string
+	/** Defaults to `Save layout`. */
+	saveLayoutLabel?: string
+	/** Defaults to `Layout name`. */
+	layoutNameLabel?: string
+	/** Defaults to `Cancel`. */
+	cancelLabel?: string
 	/** Content rendered at the start of the toolbar, before the column customizer. */
 	toolbar?: JSX.Element
 	/** Keeps the header visible while the rows scroll, inside a viewport capped by `--data-table-max-height`. */
@@ -195,6 +234,20 @@ function saveVisibleKeys(key: string | undefined, keys: string[] | undefined): v
 	} catch {
 		// Storage full or unavailable (private mode): the choice lasts for the session.
 	}
+}
+
+function sameKeys(a: string[], b: string[]): boolean {
+	return a.length === b.length && a.every((key, index) => key === b[index])
+}
+
+function sameLayout(a: Required<DataTableLayout>, b: Required<DataTableLayout>): boolean {
+	const widths = Object.keys(a.columnWidths)
+	return (
+		sameKeys(a.visibleColumns, b.visibleColumns) &&
+		sameKeys(a.columnOrder, b.columnOrder) &&
+		widths.length === Object.keys(b.columnWidths).length &&
+		widths.every((key) => a.columnWidths[key] === b.columnWidths[key])
+	)
 }
 
 function columnStyle<TRow>(
@@ -411,13 +464,18 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		table.setColumnOrder(keys)
 	}
 
+	/** `order` limited to known columns, with missing ones appended. */
+	function completeOrder(order: string[]): string[] {
+		const keys = props.columns.map((column) => column.key)
+		const known = order.filter((key) => keys.includes(key))
+		return [...new Set([...known, ...keys])]
+	}
+
 	function resetColumns(): void {
 		setVisibleKeys(defaultVisibleKeys())
 		// Forget the saved choice so later changes to the defaults apply.
 		if (props.visibleColumns === undefined) saveVisibleKeys(storageKey, undefined)
-		const keys = props.columns.map((column) => column.key)
-		const known = (props.defaultColumnOrder ?? []).filter((key) => keys.includes(key))
-		setColumnOrder([...new Set([...known, ...keys])])
+		setColumnOrder(completeOrder(props.defaultColumnOrder ?? []))
 		clearWidths()
 		props.onColumnWidthsChange?.({})
 	}
@@ -570,22 +628,160 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		props.onColumnWidthsChange?.(widths())
 	}
 
+	/**
+	 * `layout` against the current columns: unknown keys dropped, the order
+	 * completed, and widths rounded and kept for visible columns only, so equal
+	 * layouts compare equal.
+	 */
+	function normalizeLayout(layout: DataTableLayout): Required<DataTableLayout> {
+		const visible = new Set(layout.visibleColumns)
+		const visibleColumns = allToggleableKeys().filter((key) => visible.has(key))
+		const shown = (key: string) =>
+			visible.has(key) || columnsByKey().get(key)?.toggleable === false
+		const columnWidths: Record<string, number> = {}
+		for (const [key, width] of Object.entries(layout.columnWidths ?? {})) {
+			if (columnsByKey().has(key) && shown(key) && Number.isFinite(width) && width > 0) {
+				columnWidths[key] = Math.round(width)
+			}
+		}
+		return { visibleColumns, columnOrder: completeOrder(layout.columnOrder), columnWidths }
+	}
+
+	/** The layout on screen; widths only once the columns are resized. */
+	const currentLayout = createMemo(() =>
+		normalizeLayout({
+			visibleColumns: visibleKeys(),
+			columnOrder: orderedColumns().map((column) => column.key),
+			columnWidths: resized() ? widths() : {},
+		}),
+	)
+
+	const savedLayouts = createMemo(() =>
+		props.savedLayouts !== undefined ? read(props.savedLayouts) : undefined,
+	)
+	/** The saved layout equal to the current one, checked in the menu. */
+	const currentSavedLayout = createMemo(() => {
+		const current = currentLayout()
+		return savedLayouts()?.find((saved) => sameLayout(normalizeLayout(saved.layout), current))
+	})
+	const [namingLayout, setNamingLayout] = createSignal(false)
+	const [layoutName, setLayoutName] = createSignal('')
+
+	function applyLayout(name: string): void {
+		const saved = savedLayouts()?.find((s) => s.name === name)
+		if (!saved) return
+		const layout = normalizeLayout(saved.layout)
+		setVisibleKeys(layout.visibleColumns)
+		setColumnOrder(layout.columnOrder)
+		if (Object.keys(layout.columnWidths).length === 0) {
+			clearWidths()
+			props.onColumnWidthsChange?.({})
+			return
+		}
+		table.setColumnSizing(layout.columnWidths)
+		// Fits the actions column, then the fit effect fills visible columns without a width.
+		setExtraWidth((extra) => extra ?? (props.rowActions ? fitColumn(actionsIndex()) : 0))
+		props.onColumnWidthsChange?.(widths())
+	}
+
+	/** Saves the current layout, replacing a saved layout of the same name. */
+	function saveLayout(event: SubmitEvent): void {
+		event.preventDefault()
+		const name = layoutName().trim()
+		if (name === '') return
+		const others = (savedLayouts() ?? []).filter((s) => s.name !== name)
+		props.onSavedLayoutsChange?.([...others, { name, layout: currentLayout() }])
+		closeLayoutMenu()
+	}
+
 	const [draggedKey, setDraggedKey] = createSignal<string | undefined>()
 
 	const customizerId = createUniqueId()
 	const panelId = `${customizerId}-panel`
-	const [customizerOpen, setCustomizerOpen] = createSignal(false)
+	const layoutMenuId = `${customizerId}-layouts`
+	/** At most one popup is open: the column panel or the layout menu. */
+	const [popup, setPopup] = createSignal<'columns' | 'layouts' | undefined>()
+	const customizerOpen = () => popup() === 'columns'
+	const layoutMenuOpen = () => popup() === 'layouts'
 	let customizerRoot: HTMLDivElement | undefined
+	let layoutTrigger: HTMLButtonElement | undefined
+	let layoutMenu: HTMLDivElement | undefined
+
+	function layoutItems(): HTMLElement[] {
+		return [...(layoutMenu?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])]
+	}
+
+	/** Opens the layout menu and focuses the checked item, else the first or last one. */
+	function openLayoutMenu(edge: 'first' | 'last'): void {
+		setNamingLayout(false)
+		setPopup('layouts')
+		const items = layoutItems()
+		const checked = items.find((item) => item.getAttribute('aria-checked') === 'true')
+		;(checked ?? (edge === 'first' ? items[0] : items.at(-1)))?.focus()
+	}
+
+	function closeLayoutMenu(): void {
+		setPopup(undefined)
+		layoutTrigger?.focus()
+	}
+
+	function onLayoutTriggerKeyDown(event: KeyboardEvent): void {
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+		event.preventDefault()
+		openLayoutMenu(event.key === 'ArrowDown' ? 'first' : 'last')
+	}
+
+	/** Menu keyboard pattern: arrows and Home/End move, Escape returns to the trigger. */
+	function onLayoutMenuKeyDown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') {
+			event.preventDefault()
+			closeLayoutMenu()
+			return
+		}
+		if (event.key === 'Tab') {
+			setPopup(undefined)
+			return
+		}
+		const items = layoutItems()
+		const index = items.indexOf(document.activeElement as HTMLElement)
+		const next =
+			event.key === 'ArrowDown'
+				? (index + 1) % items.length
+				: event.key === 'ArrowUp'
+					? (index - 1 + items.length) % items.length
+					: event.key === 'Home'
+						? 0
+						: event.key === 'End'
+							? items.length - 1
+							: -1
+		if (next === -1) return
+		event.preventDefault()
+		items[next]?.focus()
+	}
+
+	function pickLayout(name: string): void {
+		applyLayout(name)
+		closeLayoutMenu()
+	}
+
+	function startSavingLayout(): void {
+		setLayoutName(currentSavedLayout()?.name ?? '')
+		setNamingLayout(true)
+	}
 
 	createEffect(() => {
-		if (!customizerOpen() || !showCustomizer()) return
+		if (popup() === undefined || !showCustomizer()) {
+			setNamingLayout(false)
+			return
+		}
 		function onPointerDown(event: PointerEvent): void {
 			if (customizerRoot && !customizerRoot.contains(event.target as Node)) {
-				setCustomizerOpen(false)
+				setPopup(undefined)
 			}
 		}
+		// Escape handled inside a popup (the layout menu, its name form) is prevented.
 		function onKeyDown(event: KeyboardEvent): void {
-			if (event.key === 'Escape') setCustomizerOpen(false)
+			if (event.key === 'Escape' && !event.defaultPrevented) setPopup(undefined)
 		}
 		document.addEventListener('pointerdown', onPointerDown)
 		document.addEventListener('keydown', onKeyDown)
@@ -729,20 +925,137 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		)
 	}
 
+	function layoutMenuItem(saved: DataTableSavedLayout): JSX.Element {
+		const checked = () => currentSavedLayout()?.name === saved.name
+		return (
+			<button
+				type="button"
+				role="menuitemradio"
+				class="data-table-layout-item"
+				aria-checked={checked()}
+				tabindex="-1"
+				onClick={() => pickLayout(saved.name)}
+			>
+				<span class="data-table-layout-check" aria-hidden="true">
+					<Show when={checked()}>
+						<IconCheck size={14} />
+					</Show>
+				</span>
+				{saved.name}
+			</button>
+		)
+	}
+
+	function layoutMenuContent(): JSX.Element {
+		return (
+			<div
+				ref={layoutMenu}
+				id={layoutMenuId}
+				role="menu"
+				aria-label={props.savedLayoutsLabel ?? 'Saved layouts'}
+				class="data-table-customizer-panel data-table-layout-menu"
+				onKeyDown={onLayoutMenuKeyDown}
+			>
+				<For each={savedLayouts() ?? []}>{layoutMenuItem}</For>
+				<Show when={(savedLayouts()?.length ?? 0) > 0}>
+					<hr class="data-table-layout-separator" />
+				</Show>
+				<button
+					type="button"
+					role="menuitem"
+					class="data-table-layout-item"
+					tabindex="-1"
+					onClick={startSavingLayout}
+				>
+					<span class="data-table-layout-check" aria-hidden="true">
+						<IconDeviceFloppy size={14} />
+					</span>
+					{`${props.saveLayoutLabel ?? 'Save layout'}…`}
+				</button>
+			</div>
+		)
+	}
+
+	function layoutSaveDialog(): JSX.Element {
+		const saveLabel = () => props.saveLayoutLabel ?? 'Save layout'
+		return (
+			<div
+				id={layoutMenuId}
+				role="dialog"
+				aria-label={saveLabel()}
+				class="data-table-customizer-panel"
+			>
+				<form
+					class="data-table-layout-save"
+					onSubmit={saveLayout}
+					onKeyDown={(e) => {
+						if (e.key !== 'Escape') return
+						e.preventDefault()
+						closeLayoutMenu()
+					}}
+				>
+					<input
+						ref={(el) => queueMicrotask(() => el.focus())}
+						type="text"
+						aria-label={props.layoutNameLabel ?? 'Layout name'}
+						placeholder={props.layoutNameLabel ?? 'Layout name'}
+						value={layoutName()}
+						onInput={(e) => setLayoutName(e.currentTarget.value)}
+					/>
+					<div class="data-table-customizer-actions">
+						<button type="submit">
+							<IconDeviceFloppy size={14} aria-hidden="true" />
+							{saveLabel()}
+						</button>
+						<button type="button" onClick={closeLayoutMenu}>
+							{props.cancelLabel ?? 'Cancel'}
+						</button>
+					</div>
+				</form>
+			</div>
+		)
+	}
+
+	function layoutTriggerButton(): JSX.Element {
+		return (
+			<button
+				ref={layoutTrigger}
+				type="button"
+				class="data-table-customizer-button data-table-layout-trigger"
+				aria-label={props.savedLayoutsLabel ?? 'Saved layouts'}
+				aria-haspopup="menu"
+				aria-expanded={layoutMenuOpen()}
+				aria-controls={layoutMenuId}
+				onClick={() => (layoutMenuOpen() ? setPopup(undefined) : openLayoutMenu('first'))}
+				onKeyDown={onLayoutTriggerKeyDown}
+			>
+				<IconChevronDown size={14} aria-hidden="true" />
+			</button>
+		)
+	}
+
 	function customizer(): JSX.Element {
+		const hasLayouts = () => savedLayouts() !== undefined
 		return (
 			<div ref={customizerRoot} class="data-table-customizer">
 				<button
 					type="button"
 					class="data-table-customizer-button"
+					classList={{ 'data-table-customizer-button-split': hasLayouts() }}
 					aria-haspopup="dialog"
 					aria-expanded={customizerOpen()}
 					aria-controls={panelId}
-					onClick={() => setCustomizerOpen((open) => !open)}
+					onClick={() => setPopup(customizerOpen() ? undefined : 'columns')}
 				>
 					<span aria-hidden="true">⚙</span> {props.columnCustomizerLabel ?? 'Columns'}
 				</button>
+				<Show when={hasLayouts()}>{layoutTriggerButton()}</Show>
 				<Show when={customizerOpen()}>{customizerPanel()}</Show>
+				<Show when={layoutMenuOpen()}>
+					<Show when={namingLayout()} fallback={layoutMenuContent()}>
+						{layoutSaveDialog()}
+					</Show>
+				</Show>
 			</div>
 		)
 	}

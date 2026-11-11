@@ -903,7 +903,12 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				aria-labelledby={tabId('results')}
 				hidden={tab() !== 'results'}
 			>
-				<DataTable {...tableProps} rows={filteredRows} toolbar={toolbar} />
+				<DataTable
+					{...tableProps}
+					cancelLabel={local.cancelLabel}
+					rows={filteredRows}
+					toolbar={toolbar}
+				/>
 			</div>
 			<div
 				id={panelId('filters')}

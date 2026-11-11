@@ -21,9 +21,11 @@ export {
 export {
 	DataTable,
 	type DataTableColumn,
+	type DataTableLayout,
 	type DataTablePagination,
 	type DataTablePaginationLabels,
 	type DataTableProps,
+	type DataTableSavedLayout,
 	type DataTableSort,
 	type DataTableSortDirection,
 } from './data-table'

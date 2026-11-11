@@ -6,6 +6,7 @@ import {
 	type DataTableColumn,
 	type DataTablePagination,
 	type DataTableProps,
+	type DataTableSavedLayout,
 	type DataTableSort,
 	FilterTable,
 } from '.'
@@ -750,4 +751,198 @@ test('columnLines marks the table for column separators', () => {
 	const cells = container.querySelectorAll('tbody tr:first-child td')
 	expect(getComputedStyle(cells[0] as Element).borderLeftStyle).toBe('none')
 	expect(getComputedStyle(cells[1] as Element).borderLeftStyle).toBe('solid')
+})
+
+function typeInto(input: HTMLInputElement, text: string): void {
+	input.value = text
+	input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+}
+
+function pressKey(target: Element, key: string): void {
+	target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+}
+
+function layoutTrigger(container: HTMLElement): HTMLButtonElement {
+	const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Saved layouts"]')
+	if (!trigger) throw new Error('No saved layout trigger')
+	return trigger
+}
+
+function layoutItems(container: HTMLElement): HTMLButtonElement[] {
+	return [...container.querySelectorAll<HTMLButtonElement>('[role="menu"] [role^="menuitem"]')]
+}
+
+function checkedLayout(container: HTMLElement): string | undefined {
+	return layoutItems(container)
+		.find((item) => item.getAttribute('aria-checked') === 'true')
+		?.textContent?.trim()
+}
+
+function mountLayouts(
+	initial: DataTableSavedLayout[],
+	extra: Partial<DataTableProps<Row>> = {},
+): { container: HTMLElement; changes: DataTableSavedLayout[][] } {
+	const changes: DataTableSavedLayout[][] = []
+	const [saved, setSaved] = createSignal(initial)
+	const container = mountCustomizer({
+		savedLayouts: saved,
+		onSavedLayoutsChange: (next) => {
+			changes.push(next)
+			setSaved(next)
+		},
+		...extra,
+	})
+	// Starts with the column panel closed.
+	container.querySelector<HTMLButtonElement>('.data-table-customizer-button')?.click()
+	return { container, changes }
+}
+
+test('saved layouts restore visibility, order, and widths', () => {
+	const widthChanges: Record<string, number>[] = []
+	const visibleChanges: string[][] = []
+	const { container } = mountLayouts(
+		[
+			{
+				name: 'Compact',
+				layout: {
+					visibleColumns: ['name', 'id', 'gone'],
+					columnOrder: ['id', 'name'],
+					columnWidths: { id: 80.4, name: 150, price: 999 },
+				},
+			},
+			{
+				name: 'Default',
+				layout: { visibleColumns: ['name', 'price', 'id'], columnOrder: [] },
+			},
+		],
+		{
+			resizableColumns: true,
+			onColumnWidthsChange: (widths) => widthChanges.push(widths),
+			onVisibleColumnsChange: (keys) => visibleChanges.push(keys),
+		},
+	)
+	const trigger = layoutTrigger(container)
+	expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
+	trigger.click()
+	expect(trigger.getAttribute('aria-expanded')).toBe('true')
+	expect(checkedLayout(container)).toBe('Default')
+	// Focus starts on the checked item.
+	expect(document.activeElement?.textContent?.trim()).toBe('Default')
+
+	layoutItems(container)[0]?.click()
+	expect(headers(container)).toEqual(['ID', 'Name', ''])
+	expect(columnWidths(container).slice(0, 2)).toEqual([80, 150])
+	expect(visibleChanges).toEqual([['name', 'id']])
+	expect(widthChanges.at(-1)).toEqual({ id: 80, name: 150 })
+	// Picking closes the menu and returns focus to the trigger.
+	expect(container.querySelector('[role="menu"]')).toBeNull()
+	expect(document.activeElement).toBe(trigger)
+
+	pressKey(trigger, 'ArrowDown')
+	expect(checkedLayout(container)).toBe('Compact')
+	const focused = document.activeElement as HTMLElement
+	pressKey(focused, 'ArrowDown')
+	expect(document.activeElement?.textContent?.trim()).toBe('Default')
+	;(document.activeElement as HTMLElement).click()
+	expect(headers(container)).toEqual(['Name', 'Price', 'ID'])
+	expect(container.querySelector('table')?.classList.contains('data-table-resized')).toBe(false)
+	expect(widthChanges.at(-1)).toEqual({})
+
+	pressOnHandle(container, { key: 'ArrowRight' })
+	trigger.click()
+	// Resizing leaves the saved layout.
+	expect(checkedLayout(container)).toBeUndefined()
+	pressKey(document.activeElement as HTMLElement, 'Escape')
+	expect(container.querySelector('[role="menu"]')).toBeNull()
+	expect(document.activeElement).toBe(trigger)
+})
+
+test('menu keys wrap and the two popups exclude each other', () => {
+	const { container } = mountLayouts([
+		{ name: 'A', layout: { visibleColumns: [], columnOrder: [] } },
+		{ name: 'B', layout: { visibleColumns: [], columnOrder: [] } },
+	])
+	const trigger = layoutTrigger(container)
+	pressKey(trigger, 'ArrowUp')
+	const label = () => document.activeElement?.textContent?.trim()
+	expect(label()).toBe('Save layout…')
+	pressKey(document.activeElement as HTMLElement, 'ArrowDown')
+	expect(label()).toBe('A')
+	pressKey(document.activeElement as HTMLElement, 'End')
+	expect(label()).toBe('Save layout…')
+	pressKey(document.activeElement as HTMLElement, 'Home')
+	expect(label()).toBe('A')
+
+	container.querySelector<HTMLButtonElement>('.data-table-customizer-button')?.click()
+	expect(container.querySelector('[role="menu"]')).toBeNull()
+	expect(container.querySelector('.data-table-customizer-panel[role="dialog"]')).not.toBeNull()
+	trigger.click()
+	expect(container.querySelector('[role="menu"]')).not.toBeNull()
+	expect(container.querySelectorAll('.data-table-customizer-panel')).toHaveLength(1)
+})
+
+test('saving a layout names the current columns and replaces one of the same name', () => {
+	const { container, changes } = mountLayouts([
+		{
+			name: 'Mine',
+			layout: { visibleColumns: ['name'], columnOrder: ['name', 'price', 'id'] },
+		},
+	])
+	const columnsButton = container.querySelector<HTMLButtonElement>(
+		'.data-table-customizer-button',
+	)
+	columnsButton?.click()
+	dragOnto(container, 0, 1)
+	container.querySelectorAll<HTMLInputElement>('.data-table-customizer-item input')[2]?.click()
+
+	const trigger = layoutTrigger(container)
+	const save = () => {
+		trigger.click()
+		layoutItems(container).at(-1)?.click()
+	}
+	save()
+	const name = container.querySelector<HTMLInputElement>('input[aria-label="Layout name"]')
+	if (!name) throw new Error('No layout name input')
+	expect(name.value).toBe('')
+
+	// Escape leaves the form and returns to the trigger.
+	pressKey(name, 'Escape')
+	expect(container.querySelector('.data-table-layout-save')).toBeNull()
+	expect(document.activeElement).toBe(trigger)
+
+	save()
+	const again = container.querySelector<HTMLInputElement>('input[aria-label="Layout name"]')
+	if (!again) throw new Error('No layout name input')
+	typeInto(again, ' Mine ')
+	container
+		.querySelector<HTMLButtonElement>('.data-table-layout-save button[type="submit"]')
+		?.click()
+	expect(changes).toEqual([
+		[
+			{
+				name: 'Mine',
+				layout: {
+					visibleColumns: ['name', 'price'],
+					columnOrder: ['price', 'name', 'id'],
+					columnWidths: {},
+				},
+			},
+		],
+	])
+	expect(container.querySelector('.data-table-layout-save')).toBeNull()
+	expect(document.activeElement).toBe(trigger)
+	trigger.click()
+	expect(checkedLayout(container)).toBe('Mine')
+})
+
+test('the layout trigger needs savedLayouts; an empty list only offers saving', () => {
+	const plain = mountCustomizer()
+	expect(plain.querySelector('button[aria-label="Saved layouts"]')).toBeNull()
+	dispose?.()
+	document.body.innerHTML = ''
+
+	const { container } = mountLayouts([])
+	layoutTrigger(container).click()
+	expect(layoutItems(container).map((item) => item.textContent?.trim())).toEqual(['Save layout…'])
+	expect(container.querySelector('.data-table-layout-separator')).toBeNull()
 })

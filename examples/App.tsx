@@ -7,6 +7,7 @@ import {
 	DataTable,
 	type DataTableColumn,
 	type DataTablePagination,
+	type DataTableSavedLayout,
 	type DataTableSort,
 	FilterTable,
 	type FilterTableSavedFilter,
@@ -125,6 +126,7 @@ function readPage(): PageId {
 }
 
 const SAVED_FILTERS_KEY = 'solid-components-example-saved-filters'
+const SAVED_LAYOUTS_KEY = 'solid-components-example-saved-layouts'
 const COLUMN_ORDER_KEY = 'solid-components-example-column-order'
 const COLUMN_WIDTHS_KEY = 'solid-components-example-column-widths'
 
@@ -225,6 +227,15 @@ export default function App() {
 	function closeRename(): void {
 		setModalOpen(false)
 		setModalDirty(false)
+	}
+
+	const [savedLayouts, setSavedLayouts] = createSignal<DataTableSavedLayout[]>(
+		JSON.parse(localStorage.getItem(SAVED_LAYOUTS_KEY) ?? '[]'),
+	)
+
+	function saveLayouts(next: DataTableSavedLayout[]): void {
+		localStorage.setItem(SAVED_LAYOUTS_KEY, JSON.stringify(next))
+		setSavedLayouts(next)
 	}
 
 	function saveFilters(next: FilterTableSavedFilter[]): void {
@@ -351,8 +362,8 @@ export default function App() {
 						<h1>FilterTable example</h1>
 						<p>
 							Device inventory: quick search, a grouped filter form, removable filter
-							pills, saved filters, and column order and widths (kept in
-							localStorage).
+							pills, saved filters, saved column layouts, and column order and widths
+							(kept in localStorage).
 						</p>
 
 						<section class="table-card filter-table-demo">
@@ -366,6 +377,8 @@ export default function App() {
 								onFilterValuesChange={setFilterValues}
 								savedFilters={savedFilters}
 								onSavedFiltersChange={saveFilters}
+								savedLayouts={savedLayouts}
+								onSavedLayoutsChange={saveLayouts}
 								columnOrder={columnOrder}
 								onColumnOrderChange={saveColumnOrder}
 								columnWidths={columnWidths}
