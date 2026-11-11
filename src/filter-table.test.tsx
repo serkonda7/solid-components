@@ -5,7 +5,9 @@ import {
 	type DataTableColumn,
 	FilterTable,
 	type FilterTableFilter,
+	type FilterTableProps,
 	type FilterTableSavedFilter,
+	type FilterTableValues,
 	parseFilterTableRange,
 } from '.'
 import './styles.css'
@@ -128,6 +130,93 @@ test('filter form applies on submit and pills remove filters', () => {
 	container.querySelector<HTMLButtonElement>('.filter-table-pill-clear')?.click()
 	expect(names(container)).toHaveLength(4)
 	expect(container.querySelector('.filter-table-pills')).toBeNull()
+})
+
+function mountStored(props: Partial<FilterTableProps<Row>>): HTMLElement {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={rows}
+				columns={columns}
+				filters={filters}
+				getRowId={(row) => row.id}
+				{...props}
+			/>
+		),
+		container,
+	)
+	return container
+}
+
+test('filterStorageKey restores and saves filters but not the quick search', () => {
+	const key = 'test:filters:storage'
+	localStorage.setItem(key, JSON.stringify({ category: ['Lighting'], gone: 'x', q: 'lamp' }))
+	try {
+		const container = mountStored({
+			filterStorageKey: key,
+			defaultFilterValues: { in_stock: 'true', q: 'sp' },
+		})
+		expect(names(container)).toEqual(['Spotlight'])
+
+		container.querySelector<HTMLButtonElement>('.filter-table-pill')?.click()
+		expect(JSON.parse(localStorage.getItem(key) ?? 'null')).toEqual({})
+		expect(names(container)).toEqual(['Speaker', 'Spotlight'])
+	} finally {
+		localStorage.removeItem(key)
+	}
+})
+
+test('filterStorageKey emits restored filters once when controlled', () => {
+	const key = 'test:filters:controlled'
+	localStorage.setItem(key, JSON.stringify({ category: ['Decor'] }))
+	try {
+		const [values, setValues] = createSignal<FilterTableValues>({ q: 'pl' })
+		const changes: FilterTableValues[] = []
+		const container = mountStored({
+			filterStorageKey: key,
+			filterValues: values,
+			onFilterValuesChange: (next) => {
+				changes.push(next)
+				setValues(next)
+			},
+		})
+		expect(changes).toEqual([{ category: ['Decor'], q: 'pl' }])
+		expect(names(container)).toEqual(['Planter'])
+	} finally {
+		localStorage.removeItem(key)
+	}
+})
+
+test('restoreFilters={false} and corrupt entries skip the restore but keep saving', () => {
+	const key = 'test:filters:skip'
+	localStorage.setItem(key, JSON.stringify({ category: ['Decor'] }))
+	try {
+		const onChange = vi.fn()
+		const container = mountStored({
+			filterStorageKey: key,
+			restoreFilters: false,
+			filterValues: {},
+			onFilterValuesChange: onChange,
+		})
+		expect(onChange).not.toHaveBeenCalled()
+		expect(names(container)).toHaveLength(4)
+		dispose?.()
+		document.body.innerHTML = ''
+
+		localStorage.setItem(key, '{not json')
+		const corrupt = mountStored({ filterStorageKey: key })
+		expect(names(corrupt)).toHaveLength(4)
+		tab(corrupt, 'Filters').click()
+		const category = input(corrupt, 'Category')
+		type(category, 'audio')
+		press(category, 'Enter')
+		corrupt.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+		expect(JSON.parse(localStorage.getItem(key) ?? 'null')).toEqual({ category: ['Audio'] })
+	} finally {
+		localStorage.removeItem(key)
+	}
 })
 
 test('saved filters are applied, saved, and cleared', async () => {

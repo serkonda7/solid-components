@@ -21,6 +21,7 @@ import {
 	onCleanup,
 	Show,
 	splitProps,
+	untrack,
 } from 'solid-js'
 import { Combobox, type ComboboxOption } from './combobox'
 import { DataTable, type DataTableProps } from './data-table'
@@ -69,6 +70,15 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	filterValues?: FilterTableValues | Accessor<FilterTableValues>
 	defaultFilterValues?: FilterTableValues
 	onFilterValuesChange?: (values: FilterTableValues) => void
+	/**
+	 * Persists the applied filters (not the quick search) in `localStorage` under
+	 * this exact key, e.g. `'myapp:filters:customers'`. Restored on mount in place
+	 * of `defaultFilterValues`; while `filterValues` is controlled, the restored
+	 * values are emitted once through `onFilterValuesChange` during setup.
+	 */
+	filterStorageKey?: string
+	/** Set `false` to skip restoring from `filterStorageKey` (e.g. for a deep link); changes are still saved. Defaults to `true`. */
+	restoreFilters?: boolean
 	/**
 	 * Saved filters, listed in a picker beside the quick search. Passing this
 	 * (even `[]`) enables saving: a "Save" pill names the applied filters and
@@ -132,6 +142,48 @@ function read<T>(value: T | Accessor<T>): T {
 
 function isActive(value: FilterTableValue | undefined): value is FilterTableValue {
 	return Array.isArray(value) ? value.length > 0 : (value ?? '').trim() !== ''
+}
+
+/** Reads stored filter values; undefined when unset, corrupt, or storage is unavailable. */
+function loadFilterValues(key: string | undefined): FilterTableValues | undefined {
+	if (key === undefined) return undefined
+	try {
+		const raw = globalThis.localStorage?.getItem(key)
+		if (!raw) return undefined
+		const parsed: unknown = JSON.parse(raw)
+		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
+		const values: FilterTableValues = {}
+		for (const [name, value] of Object.entries(parsed)) {
+			if (
+				typeof value === 'string' ||
+				(Array.isArray(value) && value.every((v) => typeof v === 'string'))
+			) {
+				values[name] = value
+			}
+		}
+		return values
+	} catch {
+		return undefined
+	}
+}
+
+function saveFilterValues(key: string | undefined, values: FilterTableValues): void {
+	if (key === undefined) return
+	try {
+		globalThis.localStorage?.setItem(key, JSON.stringify(values))
+	} catch {
+		// Storage full or unavailable (private mode): the filters last for the session.
+	}
+}
+
+/** `values` without the quick search and keys that are not in `keys`. */
+function pickFilters(values: FilterTableValues, keys: readonly string[]): FilterTableValues {
+	const next: FilterTableValues = {}
+	for (const key of keys) {
+		const value = values[key]
+		if (key !== QUICK_SEARCH_KEY && value !== undefined) next[key] = value
+	}
+	return next
 }
 
 /** Drops inactive entries and trims text so equal filters compare equal. */
@@ -200,6 +252,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'filterValues',
 		'defaultFilterValues',
 		'onFilterValuesChange',
+		'filterStorageKey',
+		'restoreFilters',
 		'savedFilters',
 		'onSavedFiltersChange',
 		'manualFiltering',
@@ -226,12 +280,34 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'class',
 	])
 	const rows = createMemo(() => read(local.rows))
+	// Read once: the key names a table, it is not expected to change.
+	const storageKey = untrack(() => local.filterStorageKey)
+	const filterKeys = () => local.filters.map((filter) => filter.key)
+	const stored = untrack(() =>
+		local.restoreFilters === false ? undefined : loadFilterValues(storageKey),
+	)
 	const [internalValues, setInternalValues] = createSignal<FilterTableValues>(
-		normalize(local.defaultFilterValues ?? {}),
+		untrack(() => {
+			const defaults = normalize(local.defaultFilterValues ?? {})
+			if (stored === undefined) return defaults
+			const search = defaults[QUICK_SEARCH_KEY]
+			const restored = normalize(pickFilters(stored, filterKeys()))
+			return search === undefined ? restored : { ...restored, [QUICK_SEARCH_KEY]: search }
+		}),
 	)
 	const values = createMemo(() =>
 		local.filterValues !== undefined ? normalize(read(local.filterValues)) : internalValues(),
 	)
+	// Controlled: hand the restored filters to the owner before its first render
+	// settles, so a server-filtered list fetches once.
+	untrack(() => {
+		if (stored === undefined || local.filterValues === undefined) return
+		const current = values()
+		const search = current[QUICK_SEARCH_KEY]
+		const restored = normalize(pickFilters(stored, filterKeys()))
+		const next = search === undefined ? restored : { ...restored, [QUICK_SEARCH_KEY]: search }
+		if (!sameValues(next, current)) local.onFilterValuesChange?.(next)
+	})
 
 	function setValues(next: FilterTableValues): void {
 		// A change made while a search is pending must not drop the typed text.
@@ -241,6 +317,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			pending ? { ...next, [QUICK_SEARCH_KEY]: searchInput() } : next,
 		)
 		if (local.filterValues === undefined) setInternalValues(normalized)
+		saveFilterValues(storageKey, pickFilters(normalized, filterKeys()))
 		local.onFilterValuesChange?.(normalized)
 	}
 

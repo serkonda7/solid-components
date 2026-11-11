@@ -140,6 +140,13 @@ const filters: FilterTableFilter<Device>[] = [
 - State is `FilterTableValues`: `{ [filterKey]: string | string[], q }`, inactive
   filters omitted, so it maps onto URL params. Use `defaultFilterValues`, or
   control with `filterValues`. `onFilterValuesChange` always fires.
+- `filterStorageKey` persists the applied filters (not `q`) in `localStorage` under
+  that exact key (include your app prefix, e.g. `'myapp:filters:customers'`), as a
+  JSON object of filter values; unknown filter keys are ignored. Restored on mount
+  in place of `defaultFilterValues`; unlike `DataTable`'s `storageKey` it also works
+  controlled: the restored values are emitted once through `onFilterValuesChange`
+  during setup (before effects run, so a server-filtered list fetches once).
+  `restoreFilters={false}` skips the restore (e.g. on a deep link) but keeps saving.
 - `manualFiltering` passes `rows` through, for server-side filtering. Derived `select`
   options then accumulate over the rows seen, so they don't shrink but only hold
   loaded values; pass `options` for the full list.
