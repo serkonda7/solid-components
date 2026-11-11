@@ -43,16 +43,16 @@
   },
   "packageManager": "bun@1.4.4",
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
-    "@tabler/icons-solidjs": "~3.50.0",
+    "@biomejs/biome": "2.6.6",
+    "@tabler/icons-solidjs": "~3.51.0",
     "@types/bun": "1.4.4",
-    "@vitest/browser-playwright": "~5.0.5",
-    "playwright": "~1.64.1",
-    "solid-js": "~1.9.18",
+    "@vitest/browser-playwright": "~5.1.0",
+    "playwright": "~1.65.0",
+    "solid-js": "~1.9.19",
     "typescript": "~7.0.2",
-    "vite": "~8.3.5",
-    "vite-plugin-solid": "~2.11.15",
-    "vitest": "~5.0.5"
+    "vite": "~8.3.8",
+    "vite-plugin-solid": "~2.11.16",
+    "vitest": "~5.1.0"
   },
   "peerDependencies": {
     "solid-js": ">=1.9.0",
