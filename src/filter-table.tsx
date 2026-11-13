@@ -869,13 +869,13 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			<form class="filter-table-form" onSubmit={apply}>
 				<For each={groups()}>{fieldset}</For>
 				<div class="filter-table-form-actions">
-					<button type="button" class="filter-table-button" onClick={reset}>
-						<IconX size={16} aria-hidden="true" />
-						{local.resetLabel ?? 'Reset'}
-					</button>
 					<button type="submit" class="filter-table-button filter-table-button-primary">
 						<IconSearch size={16} aria-hidden="true" />
 						{local.applyLabel ?? 'Search'}
+					</button>
+					<button type="button" class="filter-table-button" onClick={reset}>
+						<IconX size={16} aria-hidden="true" />
+						{local.resetLabel ?? 'Reset'}
 					</button>
 				</div>
 			</form>
