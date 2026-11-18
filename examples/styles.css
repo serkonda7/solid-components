@@ -109,6 +109,8 @@ button:hover {
 	flex: none;
 	width: 220px;
 	height: 100vh;
+	display: flex;
+	flex-direction: column;
 	padding: 48px 16px 24px;
 	border-right: 1px solid #30343a;
 }
@@ -144,6 +146,10 @@ button:hover {
 	color: #e8e9ed;
 }
 
+.sidebar-reset {
+	margin-top: auto;
+}
+
 @media (max-width: 640px) {
 	.layout {
 		flex-direction: column;
@@ -160,7 +166,8 @@ button:hover {
 		background: #111315;
 	}
 
-	.sidebar-title {
+	.sidebar-title,
+	.sidebar-reset {
 		display: none;
 	}
 

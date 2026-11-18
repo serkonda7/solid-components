@@ -5,7 +5,12 @@ import {
 	IconShieldLock,
 	IconSwitchHorizontal,
 } from '@tabler/icons-solidjs'
-import type { DataTableColumn, FilterTableFilter } from '../src'
+import type {
+	DataTableColumn,
+	DataTableSavedLayout,
+	FilterTableFilter,
+	FilterTableSavedFilter,
+} from '../src'
 
 /** Network device inventory for the FilterTable demo. */
 export type Device = {
@@ -481,4 +486,33 @@ export const deviceFilters: FilterTableFilter<Device>[] = [
 		getValue: (device) => new Date(2025, 0, 1 + device.id * 7),
 		formatValue: (value) => new Date(`${value}T00:00`).toLocaleDateString(),
 	},
+]
+
+/** Preset column layouts, used until the user saves their own. */
+export const exampleSavedLayouts: DataTableSavedLayout[] = [
+	{
+		name: 'Hardware',
+		layout: {
+			visibleColumns: ['role', 'manufacturer', 'model', 'serial', 'platform'],
+			columnOrder: ['name', 'manufacturer', 'model', 'serial', 'platform', 'role'],
+		},
+	},
+	{
+		name: 'Network',
+		layout: {
+			visibleColumns: ['status', 'site', 'rack', 'primaryIp', 'tags'],
+			columnOrder: ['name', 'primaryIp', 'site', 'rack', 'status', 'tags'],
+		},
+	},
+]
+
+/** Preset saved filters; the first two apply a layout of `exampleSavedLayouts`. */
+export const exampleSavedFilters: FilterTableSavedFilter[] = [
+	{ name: 'Arista inventory', values: { manufacturer: ['Arista'] }, layout: 'Hardware' },
+	{
+		name: 'Monitored in Europe',
+		values: { region: ['Europe'], monitored: 'true' },
+		layout: 'Network',
+	},
+	{ name: 'Offline devices', values: { status: ['Offline'] } },
 ]
