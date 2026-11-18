@@ -16,7 +16,14 @@ import {
 	MultiCombobox,
 	SearchBar,
 } from '../src'
-import { type Device, deviceColumns, deviceFilters, devices } from './devices'
+import {
+	type Device,
+	deviceColumns,
+	deviceFilters,
+	devices,
+	exampleSavedFilters,
+	exampleSavedLayouts,
+} from './devices'
 import '../src/styles.css'
 import './styles.css'
 import './table-demo.css'
@@ -130,6 +137,12 @@ const SAVED_LAYOUTS_KEY = 'solid-components-example-saved-layouts'
 const COLUMN_ORDER_KEY = 'solid-components-example-column-order'
 const COLUMN_WIDTHS_KEY = 'solid-components-example-column-widths'
 
+/** The stored JSON value, or `fallback` while nothing is stored. */
+function readStored<T>(key: string, fallback: T): T {
+	const stored = localStorage.getItem(key)
+	return stored === null ? fallback : JSON.parse(stored)
+}
+
 /** Stands in for a backend: `rows` is only ever the requested page. */
 function fetchDevices(sort: DataTableSort | undefined, page: number, pageSize: number) {
 	const direction = sort?.direction === 'desc' ? -1 : 1
@@ -208,7 +221,7 @@ export default function App() {
 	const [discardOpen, setDiscardOpen] = createSignal(false)
 	const [filterValues, setFilterValues] = createSignal<FilterTableValues>({})
 	const [savedFilters, setSavedFilters] = createSignal<FilterTableSavedFilter[]>(
-		JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY) ?? '[]'),
+		readStored(SAVED_FILTERS_KEY, exampleSavedFilters),
 	)
 
 	let answerDiscard: (discard: boolean) => void = () => {}
@@ -230,7 +243,7 @@ export default function App() {
 	}
 
 	const [savedLayouts, setSavedLayouts] = createSignal<DataTableSavedLayout[]>(
-		JSON.parse(localStorage.getItem(SAVED_LAYOUTS_KEY) ?? '[]'),
+		readStored(SAVED_LAYOUTS_KEY, exampleSavedLayouts),
 	)
 
 	function saveLayouts(next: DataTableSavedLayout[]): void {
@@ -286,6 +299,16 @@ export default function App() {
 						)}
 					</For>
 				</ul>
+				<button
+					type="button"
+					class="sidebar-reset"
+					onClick={() => {
+						localStorage.clear()
+						location.reload()
+					}}
+				>
+					Clear local storage
+				</button>
 			</nav>
 			<main classList={{ wide: page() === 'filter-table' }}>
 				<Switch>
@@ -363,7 +386,8 @@ export default function App() {
 						<p>
 							Device inventory: quick search, a grouped filter form, removable filter
 							pills, saved filters, saved column layouts, and column order and widths
-							(kept in localStorage).
+							(kept in localStorage). The preset saved filters "Arista inventory" and
+							"Monitored in Europe" also apply a saved layout.
 						</p>
 
 						<section class="table-card filter-table-demo">

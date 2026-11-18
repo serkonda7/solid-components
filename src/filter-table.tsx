@@ -24,7 +24,7 @@ import {
 	untrack,
 } from 'solid-js'
 import { Combobox, type ComboboxOption, MultiCombobox } from './combobox'
-import { DataTable, type DataTableProps } from './data-table'
+import { DataTable, type DataTableLayout, type DataTableProps } from './data-table'
 import {
 	createSavedEntries,
 	cx,
@@ -54,6 +54,11 @@ export type FilterTableValues = Record<string, FilterTableValue>
 export interface FilterTableSavedFilter {
 	name: string
 	values: FilterTableValues
+	/**
+	 * Name of a saved layout (`savedLayouts`) applied together with the filter.
+	 * A name that matches no saved layout is ignored.
+	 */
+	layout?: string
 }
 
 export interface FilterTableFilter<TRow> {
@@ -119,6 +124,10 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	savedFiltersLabel?: string
 	saveLabel?: string
 	saveNameLabel?: string
+	/** Names the save form's saved layout picker. Defaults to `Layout`. */
+	saveLayoutChoiceLabel?: string
+	/** The picker's entry for saving without a layout. Defaults to `No layout`. */
+	noLayoutLabel?: string
 	cancelLabel?: string
 	clearSavedFilterLabel?: string
 	/** Prefix of a selected chip's remove button name in `select` filters. Defaults to `Remove`. */
@@ -271,7 +280,10 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'savedFiltersLabel',
 		'saveLabel',
 		'saveNameLabel',
+		'saveLayoutChoiceLabel',
+		'noLayoutLabel',
 		'cancelLabel',
+		'layout',
 		'clearSavedFilterLabel',
 		'removeLabel',
 		'class',
@@ -514,22 +526,45 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		onChange: (entries) => local.onSavedFiltersChange?.(entries),
 	})
 
+	const savedLayouts = () => read(tableProps.savedLayouts) ?? []
+	const findLayout = (name: string | undefined) =>
+		name === undefined ? undefined : savedLayouts().find((layout) => layout.name === name)
+	// A fresh object per apply, so the same layout applies again after the user changed the columns.
+	const [appliedLayout, setAppliedLayout] = createSignal<DataTableLayout | undefined>()
+	createEffect(
+		on(
+			() => read(local.layout),
+			(layout) => {
+				if (layout) setAppliedLayout({ ...layout })
+			},
+		),
+	)
+
 	function applySaved(name: string): void {
 		const entry = saved.find(name)
 		if (!entry) return
 		cancelSearch()
 		setSearchInput(asText(entry.values[QUICK_SEARCH_KEY]))
 		setValues(entry.values)
+		const layout = findLayout(entry.layout)
+		if (layout) setAppliedLayout({ ...layout.layout })
 	}
+
+	// The save form's layout choice; `''` saves without one.
+	const [saveLayoutName, setSaveLayoutName] = createSignal('')
 
 	function startSaving(): void {
 		flushSearch()
 		saved.startNaming()
+		setSaveLayoutName(findLayout(saved.current()?.layout)?.name ?? '')
 	}
 
 	function save(event: SubmitEvent): void {
 		event.preventDefault()
-		if (saved.save((name) => ({ name, values: values() }))) saved.setNaming(false)
+		const layout = findLayout(saveLayoutName() || undefined)?.name
+		const create = (name: string): FilterTableSavedFilter =>
+			layout === undefined ? { name, values: values() } : { name, values: values(), layout }
+		if (saved.save(create)) saved.setNaming(false)
 	}
 
 	// The form edits a draft that is applied on submit.
@@ -784,6 +819,20 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					value={saved.name()}
 					onInput={(e) => saved.setName(e.currentTarget.value)}
 				/>
+				<Show when={savedLayouts().length > 0}>
+					<div class="filter-table-save-layout">
+						<Combobox
+							value={saveLayoutName()}
+							onChange={setSaveLayoutName}
+							emptyLabel={local.noLayoutLabel ?? 'No layout'}
+							options={savedLayouts().map((layout) => ({
+								value: layout.name,
+								label: layout.name,
+							}))}
+							ariaLabel={local.saveLayoutChoiceLabel ?? 'Layout'}
+						/>
+					</div>
+				</Show>
 				<button type="submit" class="filter-table-button filter-table-button-primary">
 					<IconDeviceFloppy size={16} aria-hidden="true" />
 					{saveLabel()}
@@ -897,6 +946,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				<DataTable
 					{...tableProps}
 					cancelLabel={local.cancelLabel}
+					layout={appliedLayout}
 					rows={filteredRows}
 					toolbar={toolbar}
 				/>
