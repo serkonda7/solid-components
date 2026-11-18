@@ -1032,6 +1032,10 @@ scroll away with the table. */
 	width: 12rem;
 }
 
+.filter-table-save-layout {
+	width: 12rem;
+}
+
 .filter-table-chip-remove {
 	display: inline-flex;
 	padding: 0;

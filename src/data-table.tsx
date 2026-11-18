@@ -30,6 +30,7 @@ import {
 	createSignal,
 	createUniqueId,
 	For,
+	on,
 	onCleanup,
 	Show,
 	untrack,
@@ -155,6 +156,11 @@ export interface DataTableProps<TRow> {
 	 */
 	savedLayouts?: DataTableSavedLayout[] | Accessor<DataTableSavedLayout[]>
 	onSavedLayoutsChange?: (savedLayouts: DataTableSavedLayout[]) => void
+	/**
+	 * Applies a column layout whenever a new value arrives, like picking a saved
+	 * layout does. Not strict control: the user can change the columns afterwards.
+	 */
+	layout?: DataTableLayout | Accessor<DataTableLayout | undefined>
 	/** Names the layout menu and its trigger. Defaults to `Saved layouts`. */
 	savedLayoutsLabel?: string
 	/** Defaults to `Save layout`. */
@@ -673,15 +679,27 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		onChange: (saved) => props.onSavedLayoutsChange?.(saved),
 	})
 
-	function applyLayout(name: string): void {
-		const saved = layouts.find(name)
-		if (!saved) return
-		const layout = normalizeLayout(saved.layout)
+	function applyLayout(value: DataTableLayout): void {
+		const layout = normalizeLayout(value)
 		setVisibleKeys(layout.visibleColumns)
 		setColumnOrder(layout.columnOrder)
 		restoreWidths(layout.columnWidths)
 		emitWidths()
 	}
+
+	function applySavedLayout(name: string): void {
+		const saved = layouts.find(name)
+		if (saved) applyLayout(saved.layout)
+	}
+
+	createEffect(
+		on(
+			() => read(props.layout),
+			(layout) => {
+				if (layout) applyLayout(layout)
+			},
+		),
+	)
 
 	function saveLayout(event: SubmitEvent): void {
 		event.preventDefault()
@@ -754,7 +772,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	function pickLayout(name: string): void {
-		applyLayout(name)
+		applySavedLayout(name)
 		closeLayoutMenu()
 	}
 

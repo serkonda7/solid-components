@@ -62,6 +62,8 @@ then "Save layout…", which turns the popup into a name form.
   i.e. the visible toggleable keys, every key in order, and pixel widths (rounded,
   visible columns only; `{}` while the browser lays out the columns). Sorting is
   not part of a layout.
+- `layout` applies a `DataTableLayout` whenever a new value arrives (not strict
+  control). `FilterTable` uses it for a saved filter's layout.
 - Picking one applies it through the usual setters, so `onVisibleColumnsChange`,
   `onColumnOrderChange` and `onColumnWidthsChange` fire and `storageKey` saves it.
   Unknown keys are ignored, missing columns are appended, visible columns without a
@@ -177,13 +179,18 @@ const filters: FilterTableFilter<Device>[] = [
   loaded values; pass `options` for the full list.
 - The Results badge shows `totalCount`, else `pagination.rowCount`, else the rows
   shown. Pass `totalCount` for `manualFiltering` without `pagination`.
-- Saved filters: pass `savedFilters` (`{ name, values }[]`, even `[]`) +
+- Saved filters: pass `savedFilters` (`{ name, values, layout? }[]`, even `[]`) +
   `onSavedFiltersChange`. Saving replaces an entry of the same name. Persistence
   and deletion are up to the consumer.
+- With `savedLayouts`, the save form also picks one of them (or "No layout"),
+  stored by name in `layout`. Picking the saved filter then applies that layout
+  too; a name no saved layout has is ignored. The form preselects the layout of
+  the saved filter it overwrites.
 - Texts: `quickSearchLabel`, `resultsLabel`, `filtersLabel`, `applyLabel`,
   `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
   `fromLabel`, `toLabel`, `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
-  `clearSavedFilterLabel`, `removeLabel` (chip remove prefix).
+  `clearSavedFilterLabel`, `saveLayoutChoiceLabel`, `noLayoutLabel`, `removeLabel`
+  (chip remove prefix).
 - `select` filters use `MultiCombobox`: the picked values show as chips inside the field.
 
 ## Combobox
