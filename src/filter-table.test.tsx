@@ -3,12 +3,15 @@ import { render } from 'solid-js/web'
 import { afterEach, expect, test, vi } from 'vitest'
 import {
 	type DataTableColumn,
+	FILTER_TABLE_EMPTY,
 	FilterTable,
 	type FilterTableFilter,
 	type FilterTableProps,
 	type FilterTableSavedFilter,
 	type FilterTableValues,
 	parseFilterTableRange,
+	parseFilterTableSelect,
+	resolveFilterTableDate,
 } from '.'
 import './styles.css'
 
@@ -285,6 +288,19 @@ test('saving is disabled without savedFilters', () => {
 	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
 	expect(container.querySelector('.filter-table-pill-save')).toBeNull()
 	expect(container.querySelector('input[aria-label="Saved filters"]')).toBeNull()
+})
+
+test('quick search requires every word, in any order and case', () => {
+	const container = mount()
+	const search = container.querySelector<HTMLInputElement>('input[type="search"]')
+	if (!search) throw new Error('No quick search')
+
+	type(search, 'lighting SP')
+	expect(names(container)).toEqual(['Spotlight'])
+	type(search, '  light   lamp ')
+	expect(names(container)).toEqual(['Lamp'])
+	type(search, 'lamp audio')
+	expect(names(container)).toEqual([])
 })
 
 test('quick search spans the joined column values', () => {
@@ -635,4 +651,167 @@ test('parseFilterTableRange splits open bounds', () => {
 	expect(parseFilterTableRange('1.5..2')).toEqual({ min: '1.5', max: '2' })
 	expect(parseFilterTableRange('..2')).toEqual({ min: '', max: '2' })
 	expect(parseFilterTableRange('2026-01-01..')).toEqual({ min: '2026-01-01', max: '' })
+})
+
+type Tagged = Row & { tags: string[]; note: string | null; added: Date | null }
+
+const daysAgo = (days: number) => {
+	const date = new Date()
+	date.setDate(date.getDate() - days)
+	return date
+}
+
+const tagged: Tagged[] = [
+	{ ...rows[0], tags: ['new', 'sale'], note: 'fragile', added: daysAgo(0) },
+	{ ...rows[1], tags: [], note: null, added: daysAgo(10) },
+	{ ...rows[2], tags: ['sale'], note: ' ', added: daysAgo(40) },
+	{ ...rows[3], tags: ['new'], note: 'bright', added: null },
+] as Tagged[]
+
+const advancedFilters: FilterTableFilter<Tagged>[] = [
+	{ key: 'category', label: 'Category', type: 'select' },
+	{ key: 'tags', label: 'Tags', type: 'select', empty: true },
+	{ key: 'note', label: 'Note', type: 'text', empty: true },
+	{ key: 'stock', label: 'Stock', type: 'number-range', empty: true },
+	{ key: 'added', label: 'Added', type: 'date-range', empty: true },
+]
+
+function mountAdvanced(values: FilterTableValues, onChange?: (v: unknown) => void) {
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => (
+			<FilterTable
+				rows={tagged}
+				columns={columns as DataTableColumn<Tagged>[]}
+				filters={advancedFilters}
+				getRowId={(row) => row.id}
+				defaultFilterValues={values}
+				onFilterValuesChange={onChange}
+			/>
+		),
+		container,
+	)
+	return container
+}
+
+function remount(values: FilterTableValues): string[] {
+	dispose?.()
+	document.body.innerHTML = ''
+	return names(mountAdvanced(values))
+}
+
+function pillTexts(container: HTMLElement): string[] {
+	return [...container.querySelectorAll('.filter-table-pill')].map((p) => p.textContent ?? '')
+}
+
+function combobox(container: HTMLElement, label: string): HTMLInputElement {
+	const found = container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+	if (!found) throw new Error(`No combobox ${label}`)
+	return found
+}
+
+function pick(input: HTMLInputElement, label: string): void {
+	input.focus()
+	input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+	const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+		(o) => o.textContent === label,
+	)
+	if (!option) throw new Error(`No option ${label}`)
+	option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+	option.click()
+}
+
+test('select values prefixed with ! exclude, alone or with included values', () => {
+	expect(remount({ category: ['!Lighting'] })).toEqual(['Planter', 'Speaker'])
+	expect(remount({ tags: ['!sale'] })).toEqual(['Planter', 'Spotlight'])
+	expect(remount({ tags: ['new', '!sale'] })).toEqual(['Spotlight'])
+	expect(parseFilterTableSelect(['a', '!b'])).toEqual({ include: ['a'], exclude: ['b'] })
+})
+
+test('the is not operator prefixes the picked values and pills show them', () => {
+	const onChange = vi.fn()
+	const container = mountAdvanced({ category: ['Lighting'] }, onChange)
+	tab(container, 'Filters').click()
+	const operator = combobox(container, 'Category condition')
+	expect(operator.value).toBe('is')
+
+	pick(operator, 'is not')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(onChange).toHaveBeenLastCalledWith({ category: ['!Lighting'] })
+	expect(names(container)).toEqual(['Planter', 'Speaker'])
+	expect(pillTexts(container)).toEqual(['Category: ≠ Lighting', 'Clear all'])
+
+	tab(container, 'Filters').click()
+	expect(operator.value).toBe('is not')
+})
+
+test('empty and not empty match missing values for every filter type', () => {
+	expect(remount({ tags: [FILTER_TABLE_EMPTY] })).toEqual(['Planter'])
+	expect(remount({ tags: [`!${FILTER_TABLE_EMPTY}`] })).toEqual(['Lamp', 'Speaker', 'Spotlight'])
+	expect(remount({ tags: [FILTER_TABLE_EMPTY, 'sale'] })).toEqual(['Lamp', 'Planter', 'Speaker'])
+	expect(remount({ note: FILTER_TABLE_EMPTY })).toEqual(['Planter', 'Speaker'])
+	expect(remount({ note: `!${FILTER_TABLE_EMPTY}` })).toEqual(['Lamp', 'Spotlight'])
+	expect(remount({ added: FILTER_TABLE_EMPTY })).toEqual(['Spotlight'])
+	expect(remount({ stock: `!${FILTER_TABLE_EMPTY}` })).toEqual([
+		'Lamp',
+		'Planter',
+		'Speaker',
+		'Spotlight',
+	])
+})
+
+test('None picks rows without a value, and is not None rows with one', () => {
+	const onChange = vi.fn()
+	const container = mountAdvanced({}, onChange)
+	tab(container, 'Filters').click()
+	expect(container.querySelector('input[aria-label="Note condition"]')).toBeNull()
+
+	pick(input(container, 'Tags'), 'None')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(onChange).toHaveBeenLastCalledWith({ tags: [FILTER_TABLE_EMPTY] })
+	expect(names(container)).toEqual(['Planter'])
+	expect(pillTexts(container)).toEqual(['Tags: None', 'Clear all'])
+
+	tab(container, 'Filters').click()
+	pick(combobox(container, 'Tags condition'), 'is not')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(onChange).toHaveBeenLastCalledWith({ tags: [`!${FILTER_TABLE_EMPTY}`] })
+	expect(names(container)).toEqual(['Lamp', 'Speaker', 'Spotlight'])
+	expect(pillTexts(container)).toEqual(['Tags: ≠ None', 'Clear all'])
+})
+
+test('relative date bounds resolve against today', () => {
+	const now = new Date(2026, 2, 31, 15)
+	expect(resolveFilterTableDate('today', now)).toBe('2026-03-31')
+	expect(resolveFilterTableDate('-6d', now)).toBe('2026-03-25')
+	expect(resolveFilterTableDate('+1w', now)).toBe('2026-04-07')
+	expect(resolveFilterTableDate('-1m', now)).toBe('2026-02-28')
+	expect(resolveFilterTableDate('-1y', now)).toBe('2025-03-31')
+	expect(resolveFilterTableDate('2026-01-02', now)).toBe('2026-01-02')
+	expect(resolveFilterTableDate('', now)).toBe('')
+
+	expect(remount({ added: '-6d..today' })).toEqual(['Lamp'])
+	expect(remount({ added: '-29d..' })).toEqual(['Lamp', 'Planter'])
+	expect(remount({ added: '..-30d' })).toEqual(['Speaker'])
+})
+
+test('date presets apply relative ranges and leaving one keeps its days', () => {
+	const onChange = vi.fn()
+	const container = mountAdvanced({}, onChange)
+	tab(container, 'Filters').click()
+
+	pick(combobox(container, 'Added condition'), 'Last 30 days')
+	expect(input(container, 'Added').value).toBe(resolveFilterTableDate('-29d'))
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(onChange).toHaveBeenLastCalledWith({ added: '-29d..today' })
+	expect(names(container)).toEqual(['Lamp', 'Planter'])
+	expect(pillTexts(container)).toEqual(['Added: Last 30 days', 'Clear all'])
+
+	tab(container, 'Filters').click()
+	pick(combobox(container, 'Added condition'), 'Custom range')
+	container.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+	expect(onChange).toHaveBeenLastCalledWith({
+		added: `${resolveFilterTableDate('-29d')}..${resolveFilterTableDate('today')}`,
+	})
 })

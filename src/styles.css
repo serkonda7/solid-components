@@ -1051,12 +1051,43 @@ scroll away with the table. */
 
 .filter-table-range {
 	display: flex;
+	align-items: center;
 	gap: 0.5rem;
 }
 
 .filter-table-range .filter-table-input {
 	flex: 1;
 	min-width: 0;
+}
+
+.filter-table-range-separator {
+	color: var(
+		--filter-table-muted,
+		var(--text-secondary, light-dark(#616161, #9b9da5))
+	);
+}
+
+.filter-table-condition {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.filter-table-condition > :last-child {
+	flex: 1;
+	min-width: 0;
+}
+
+.filter-table-condition-picker {
+	flex: 0 0 10rem;
+}
+
+.filter-table-condition > .filter-table-condition-picker:last-child {
+	flex: 0 0 10rem;
+}
+
+.filter-table-operator {
+	flex: 0 0 6.5rem;
 }
 
 .filter-table-form {

@@ -3,9 +3,9 @@ import {
 	type ColumnDef,
 	type ColumnFiltersState,
 	columnFilteringFeature,
+	constructFilterFn,
 	createFilteredRowModel,
 	createTable,
-	filterFn_includesString,
 	globalFilteringFeature,
 	type RowData,
 	tableFeatures,
@@ -40,7 +40,11 @@ export type FilterTableFilterType = 'text' | 'select' | 'boolean' | 'number-rang
 /**
  * A filter's value: text for `text`/`boolean` (`'true'`/`'false'`), a list for
  * `select`, and `min..max` for ranges, with either bound left empty (`10..`, `..20`).
- * Date bounds are `YYYY-MM-DD`. Read ranges with `parseFilterTableRange`.
+ * Date bounds are `YYYY-MM-DD`, `today`, or an offset from today (`-7d`, `+2w`,
+ * `-3m`, `+1y`). Read ranges with `parseFilterTableRange` and resolve date bounds
+ * with `resolveFilterTableDate`. `select` values prefixed with `!` exclude
+ * (`parseFilterTableSelect`). `FILTER_TABLE_EMPTY` matches rows without a value,
+ * `!` + `FILTER_TABLE_EMPTY` rows with one.
  */
 export type FilterTableValue = string | string[]
 
@@ -74,9 +78,41 @@ export interface FilterTableFilter<TRow> {
 	/** Choices of a `select` filter; derived from the row values when omitted. */
 	options?: ComboboxOption[]
 	placeholder?: string
-	/** Formats a range bound in the filter pills; defaults to the raw value. */
+	/** Formats an absolute range bound in the filter pills; defaults to the raw value. */
 	formatValue?: (value: string) => string
+	/** `select` only: set `false` to hide the form's "is"/"is not" picker. */
+	exclude?: boolean
+	/**
+	 * `select`/`boolean`: adds a "None" choice matching rows without a value
+	 * (`null`, `undefined`, blank text, or an empty array). With "is not", a
+	 * `select` matches rows that have one.
+	 */
+	empty?: boolean
+	/**
+	 * `date-range` only: quick picks in the form, e.g. `{ label: 'Last 7 days',
+	 * value: '-6d..today' }`. Defaults to `FILTER_TABLE_DATE_PRESETS`; `[]` hides them.
+	 */
+	presets?: FilterTableDatePreset[]
 }
+
+/** A named `date-range` value, usually relative so it stays current in saved filters. */
+export interface FilterTableDatePreset {
+	label: string
+	value: string
+}
+
+/** Default `date-range` presets. Pass your own `presets` to translate them. */
+export const FILTER_TABLE_DATE_PRESETS: FilterTableDatePreset[] = [
+	{ label: 'Today', value: 'today..today' },
+	{ label: 'Last 7 days', value: '-6d..today' },
+	{ label: 'Last 30 days', value: '-29d..today' },
+	{ label: 'Last 12 months', value: '-1y..today' },
+]
+
+/** Filter value matching rows without a value; prefix with `!` for rows with one. */
+export const FILTER_TABLE_EMPTY = '__empty__'
+const EXCLUDE_PREFIX = '!'
+const NOT_EMPTY = `${EXCLUDE_PREFIX}${FILTER_TABLE_EMPTY}`
 
 export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'toolbar'> {
 	filters: FilterTableFilter<TRow>[]
@@ -132,6 +168,16 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	clearSavedFilterLabel?: string
 	/** Prefix of a selected chip's remove button name in `select` filters. Defaults to `Remove`. */
 	removeLabel?: string
+	/** `select` operator matching the picked values. Defaults to `is`. */
+	isLabel?: string
+	/** `select` operator excluding the picked values. Defaults to `is not`. */
+	isNotLabel?: string
+	/** Accessible name suffix of the operator and condition pickers. Defaults to `condition`. */
+	conditionLabel?: string
+	/** Choice for rows without a value (`empty` filters). Defaults to `None`. */
+	noneLabel?: string
+	/** The date presets picker's entry for a typed range. Defaults to `Custom range`. */
+	customLabel?: string
 }
 
 const QUICK_SEARCH_KEY = 'q'
@@ -139,6 +185,21 @@ const DEFAULT_MANUAL_DEBOUNCE = 300
 const RANGE_SEPARATOR = '..'
 /** Table column holding each row's search text, which is what the quick search filters. */
 const SEARCH_COLUMN = '__search__'
+
+/** The quick search's words, lowercased; a row must contain every one of them. */
+function searchWords(text: string): string[] {
+	return text
+		.toLowerCase()
+		.split(/\s+/)
+		.filter((word) => word !== '')
+}
+
+const includesAllWords = constructFilterFn({
+	filter: (text: string, words: string[]) => words.every((word) => text.includes(word)),
+	autoRemove: (value: unknown) => searchWords(asText(value)).length === 0,
+	resolveFilterValue: (value: unknown) => searchWords(asText(value)),
+	resolveDataValue: (value: unknown) => asText(value).toLowerCase(),
+})
 
 const features = tableFeatures({
 	columnFilteringFeature,
@@ -150,6 +211,57 @@ const features = tableFeatures({
 export function parseFilterTableRange(value: string): { min: string; max: string } {
 	const [min = '', max = ''] = value.split(RANGE_SEPARATOR)
 	return { min, max }
+}
+
+/** Splits `select` values into included and excluded (`!`-prefixed, prefix removed) ones. */
+export function parseFilterTableSelect(values: readonly string[]): {
+	include: string[]
+	exclude: string[]
+} {
+	const include: string[] = []
+	const exclude: string[] = []
+	for (const value of values) {
+		if (value.startsWith(EXCLUDE_PREFIX)) exclude.push(value.slice(EXCLUDE_PREFIX.length))
+		else include.push(value)
+	}
+	return { include, exclude }
+}
+
+const RELATIVE_DATE = /^([+-])(\d+)([dwmy])$/
+
+/**
+ * The `YYYY-MM-DD` day a date bound stands for: `today` and offsets (`-7d`,
+ * `+2w`, `-3m`, `+1y`) count from the local day of `now`. Other bounds are
+ * returned unchanged, `''` included.
+ */
+export function resolveFilterTableDate(bound: string, now: Date = new Date()): string {
+	if (bound === 'today') return toDay(now) ?? bound
+	const relative = RELATIVE_DATE.exec(bound)
+	if (!relative) return bound
+	const [, sign, count, unit] = relative
+	const amount = Number(count) * (sign === '-' ? -1 : 1)
+	const date = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+	if (unit === 'd' || unit === 'w') {
+		date.setDate(date.getDate() + amount * (unit === 'w' ? 7 : 1))
+	} else {
+		const day = date.getDate()
+		date.setDate(1)
+		date.setMonth(date.getMonth() + amount * (unit === 'y' ? 12 : 1))
+		// Clamp to the month's last day, so Mar 31 - 1m is Feb 28, not Mar 3.
+		const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+		date.setDate(Math.min(day, lastDay))
+	}
+	return toDay(date) ?? bound
+}
+
+function isRelativeDate(bound: string): boolean {
+	return bound === 'today' || RELATIVE_DATE.test(bound)
+}
+
+function isBlank(value: unknown): boolean {
+	if (value == null) return true
+	if (typeof value === 'string') return value.trim() === ''
+	return Array.isArray(value) && value.length === 0
 }
 
 function formatRange(min: string, max: string): string {
@@ -242,7 +354,22 @@ function inNumberRange(value: unknown, min: string, max: string): boolean {
 
 function inDateRange(value: unknown, min: string, max: string): boolean {
 	const day = toDay(value)
-	return day !== undefined && (min === '' || day >= min) && (max === '' || day <= max)
+	if (day === undefined) return false
+	const from = resolveFilterTableDate(min)
+	const to = resolveFilterTableDate(max)
+	return (from === '' || day >= from) && (to === '' || day <= to)
+}
+
+function matchesSelect(actual: unknown, value: FilterTableValue): boolean {
+	const { include, exclude } = parseFilterTableSelect(Array.isArray(value) ? value : [value])
+	const candidates = (Array.isArray(actual) ? actual : [actual])
+		.map(asText)
+		.filter((text) => text !== '')
+	const hit = (wanted: string[]) =>
+		wanted.some((v) =>
+			v === FILTER_TABLE_EMPTY ? candidates.length === 0 : candidates.includes(v),
+		)
+	return (include.length === 0 || hit(include)) && !hit(exclude)
 }
 
 /**
@@ -286,6 +413,11 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'layout',
 		'clearSavedFilterLabel',
 		'removeLabel',
+		'isLabel',
+		'isNotLabel',
+		'conditionLabel',
+		'noneLabel',
+		'customLabel',
 		'class',
 	])
 	const rows = createMemo(() => read(local.rows))
@@ -296,6 +428,9 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	const quickSearchLabel = () => local.quickSearchLabel ?? 'Quick search'
 	const savedFiltersLabel = () => local.savedFiltersLabel ?? 'Saved filters'
 	const saveNameLabel = () => local.saveNameLabel ?? 'Filter name'
+	const noneLabel = () => local.noneLabel ?? 'None'
+	const conditionName = (filter: FilterTableFilter<TRow>) =>
+		`${filter.label} ${local.conditionLabel ?? 'condition'}`
 	// Read once: the key names a table, it is not expected to change.
 	const storageKey = untrack(() => local.filterStorageKey)
 	const filterKeys = () => local.filters.map((filter) => filter.key)
@@ -388,11 +523,9 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	function matches(row: TRow, filter: FilterTableFilter<TRow>, value: FilterTableValue): boolean {
 		if (filter.match) return filter.match(row, value)
 		const actual = filterValue(row, filter)
-		if (filter.type === 'select') {
-			const wanted = Array.isArray(value) ? value : [value]
-			const candidates = Array.isArray(actual) ? actual : [actual]
-			return candidates.some((candidate) => wanted.includes(asText(candidate)))
-		}
+		if (filter.type === 'select') return matchesSelect(actual, value)
+		if (value === FILTER_TABLE_EMPTY) return isBlank(actual)
+		if (value === NOT_EMPTY) return !isBlank(actual)
 		if (filter.type === 'boolean') return Boolean(actual) === (value === 'true')
 		if (filter.type === 'number-range' || filter.type === 'date-range') {
 			const { min, max } = parseFilterTableRange(asText(value))
@@ -438,7 +571,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		get manualFiltering() {
 			return local.manualFiltering
 		},
-		globalFilterFn: filterFn_includesString,
+		globalFilterFn: includesAllWords,
 		getColumnCanGlobalFilter: (column) => column.id === SEARCH_COLUMN,
 		state: {
 			get columnFilters() {
@@ -474,12 +607,23 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	}, new Map())
 
 	function options(filter: FilterTableFilter<TRow>): ComboboxOption[] {
-		if (filter.options) return filter.options
-		return (derivedOptions().get(filter.key) ?? []).map((value) => ({ value, label: value }))
+		const choices =
+			filter.options ??
+			(derivedOptions().get(filter.key) ?? []).map((value) => ({ value, label: value }))
+		return filter.empty
+			? [{ value: FILTER_TABLE_EMPTY, label: noneLabel() }, ...choices]
+			: choices
 	}
 
+	const presets = (filter: FilterTableFilter<TRow>) =>
+		filter.type === 'date-range' ? (filter.presets ?? FILTER_TABLE_DATE_PRESETS) : []
+
 	function rangeLabel(filter: FilterTableFilter<TRow>, value: string): string {
-		const format = filter.formatValue ?? ((bound: string) => bound)
+		const preset = presets(filter).find((p) => p.value === value)
+		if (preset) return preset.label
+		// Relative bounds read as typed; `formatValue` expects a `YYYY-MM-DD` day.
+		const format = (bound: string) =>
+			isRelativeDate(bound) || !filter.formatValue ? bound : filter.formatValue(bound)
 		const { min, max } = parseFilterTableRange(value)
 		if (max === '') return `≥ ${format(min)}`
 		if (min === '') return `≤ ${format(max)}`
@@ -487,6 +631,11 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	}
 
 	function optionLabel(filter: FilterTableFilter<TRow>, value: string): string {
+		if (value === FILTER_TABLE_EMPTY) return noneLabel()
+		if (value === NOT_EMPTY) return `≠ ${noneLabel()}`
+		if (filter.type === 'select' && value.startsWith(EXCLUDE_PREFIX)) {
+			return `≠ ${optionLabel(filter, value.slice(EXCLUDE_PREFIX.length))}`
+		}
 		if (filter.type === 'boolean') {
 			return value === 'true' ? yesLabel() : noLabel()
 		}
@@ -627,55 +776,136 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 			const value = draftValue(filter.key)
 			return Array.isArray(value) ? value : []
 		}
-		return (
+		// Kept while nothing is picked; once values are, their `!` prefix is the mode.
+		const [excludeMode, setExcludeMode] = createSignal(false)
+		const excluding = () =>
+			selected().length > 0
+				? selected().some((value) => value.startsWith(EXCLUDE_PREFIX))
+				: excludeMode()
+		const plain = (value: string) =>
+			value.startsWith(EXCLUDE_PREFIX) ? value.slice(EXCLUDE_PREFIX.length) : value
+		const store = (values: string[], exclude: boolean) =>
+			setDraftValue(
+				filter.key,
+				values.map((value) =>
+					exclude ? `${EXCLUDE_PREFIX}${plain(value)}` : plain(value),
+				),
+			)
+		const combobox = (
 			<MultiCombobox
 				id={fieldId(filter.key)}
-				values={selected()}
-				onChange={(values) => setDraftValue(filter.key, values)}
+				values={selected().map(plain)}
+				onChange={(values) => store(values, excluding())}
 				options={options(filter)}
 				placeholder={filter.placeholder ?? anyLabel()}
 				removeLabel={(label) => `${local.removeLabel ?? 'Remove'} ${label}`}
 			/>
 		)
+		if (filter.exclude === false) return combobox
+		return (
+			<div class="filter-table-condition">
+				<div class="filter-table-operator">
+					<Combobox
+						value={excluding() ? 'not' : 'is'}
+						onChange={(operator) => {
+							setExcludeMode(operator === 'not')
+							store(selected(), operator === 'not')
+						}}
+						options={[
+							{ value: 'is', label: local.isLabel ?? 'is' },
+							{ value: 'not', label: local.isNotLabel ?? 'is not' },
+						]}
+						ariaLabel={conditionName(filter)}
+					/>
+				</div>
+				{combobox}
+			</div>
+		)
+	}
+
+	/** A `date-range` field with its presets picker in front, when it has presets. */
+	function presetField(filter: FilterTableFilter<TRow>, inputs: JSX.Element): JSX.Element {
+		const choices = presets(filter).map((p) => ({ value: p.value, label: p.label }))
+		if (choices.length === 0) return inputs
+		const preset = () => {
+			const value = asText(draftValue(filter.key))
+			return choices.some((choice) => choice.value === value) ? value : ''
+		}
+		function choose(value: string): void {
+			if (value !== '') {
+				setDraftValue(filter.key, value)
+				return
+			}
+			// Leaving a preset keeps its days, now absolute, to edit.
+			const { min, max } = parseFilterTableRange(asText(draftValue(filter.key)))
+			setDraftValue(
+				filter.key,
+				formatRange(resolveFilterTableDate(min), resolveFilterTableDate(max)),
+			)
+		}
+		return (
+			<div class="filter-table-condition">
+				<div class="filter-table-condition-picker">
+					<Combobox
+						value={preset()}
+						onChange={choose}
+						emptyLabel={local.customLabel ?? 'Custom range'}
+						options={choices}
+						ariaLabel={conditionName(filter)}
+					/>
+				</div>
+				{inputs}
+			</div>
+		)
 	}
 
 	function rangeField(filter: FilterTableFilter<TRow>): JSX.Element {
-		const type = filter.type === 'date-range' ? 'date' : 'number'
+		const isDate = filter.type === 'date-range'
+		const type = isDate ? 'date' : 'number'
 		const range = () => parseFilterTableRange(asText(draftValue(filter.key)))
 		// Memos: rewriting a number input's value would wipe a partial entry like `-`.
 		const min = createMemo(() => range().min)
 		const max = createMemo(() => range().max)
+		// Date inputs show relative bounds as the days they stand for.
+		const shown = (bound: string) => (isDate ? resolveFilterTableDate(bound) : bound)
 		const fromLabel = () => local.fromLabel ?? 'From'
 		const toLabel = () => local.toLabel ?? 'To'
-		return (
+		const inputs = (
 			<div class="filter-table-range">
 				<input
 					id={fieldId(filter.key)}
 					class="filter-table-input"
 					type={type}
 					step="any"
-					max={max() || undefined}
+					max={shown(max()) || undefined}
 					aria-label={`${filter.label} ${fromLabel()}`}
+					title={fromLabel()}
 					placeholder={fromLabel()}
-					value={min()}
+					value={shown(min())}
 					onInput={(e) =>
 						setDraftValue(filter.key, formatRange(e.currentTarget.value, max()))
 					}
 				/>
+				{/* Native date inputs hide the placeholders, so mark the pair as a range. */}
+				<span class="filter-table-range-separator" aria-hidden="true">
+					–
+				</span>
 				<input
 					class="filter-table-input"
 					type={type}
 					step="any"
-					min={min() || undefined}
+					min={shown(min()) || undefined}
 					aria-label={`${filter.label} ${toLabel()}`}
+					title={toLabel()}
 					placeholder={toLabel()}
-					value={max()}
+					value={shown(max())}
 					onInput={(e) =>
 						setDraftValue(filter.key, formatRange(min(), e.currentTarget.value))
 					}
 				/>
 			</div>
 		)
+		return isDate ? presetField(filter, inputs) : inputs
 	}
 
 	function field(filter: FilterTableFilter<TRow>): JSX.Element {
@@ -704,6 +934,9 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					options={[
 						{ value: 'true', label: yesLabel() },
 						{ value: 'false', label: noLabel() },
+						...(filter.empty
+							? [{ value: FILTER_TABLE_EMPTY, label: noneLabel() }]
+							: []),
 					]}
 				/>
 			)

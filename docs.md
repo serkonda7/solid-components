@@ -159,9 +159,27 @@ const filters: FilterTableFilter<Device>[] = [
   `match(row, value)` replaces the built-in matching.
 - Range values are strings: `min..max`, either bound may be empty (`10..`, `..20`),
   dates as `YYYY-MM-DD`. `parseFilterTableRange(value)` returns `{ min, max }`.
-  `formatValue(bound)` on the filter formats bounds in the pills.
+  `formatValue(bound)` on the filter formats absolute bounds in the pills.
+- Date bounds may be relative: `today` or an offset from today (`-7d`, `+2w`, `-3m`,
+  `+1y`), so saved filters stay current. `resolveFilterTableDate(bound, now?)`
+  turns a bound into `YYYY-MM-DD` (e.g. for `manualFiltering`); months clamp to the
+  last day. `date-range` filters offer `presets` (`{ label, value }[]`, default
+  `FILTER_TABLE_DATE_PRESETS`: today, last 7/30 days, last 12 months; `[]` hides
+  them) in a picker before the inputs; the pill shows a preset's label.
+- `select` values prefixed with `!` exclude: a row matches if it has any included
+  value (or none are given) and no excluded one. The form's "is"/"is not" picker
+  in front of the field prefixes all picked values (hide it with `exclude: false`);
+  mixed values collapse to exclusions when edited there. Pills read `Status: ≠ offline`.
+  `parseFilterTableSelect(values)` returns `{ include, exclude }`.
+- `empty: true` adds a "None" choice to `select` (first option) and `boolean`
+  filters: `FILTER_TABLE_EMPTY` matches rows without a value (`null`, `undefined`,
+  blank text, `[]`), `!` + it ("is not" None) rows with one; pills read `None` /
+  `≠ None`. Every filter type matches these values when set in `filterValues`; the
+  form offers them only on `select` and `boolean`. A custom `match` receives them
+  unchanged.
 - Filter form edits stay a draft until "Search"/Enter. "Reset" keeps the quick search.
-- Quick search matches `getSearchText(row)`, default the column values; hide it
+- Quick search matches rows whose `getSearchText(row)` (default: the column values)
+  contains every whitespace-separated word, case-insensitive, in any order; hide it
   with `quickSearch={false}`. `quickSearchDebounce` (ms, default 300 with
   `manualFiltering`, else 0) delays applying it; Enter applies at once.
 - State is `FilterTableValues`: `{ [filterKey]: string | string[], q }`, inactive
@@ -190,7 +208,8 @@ const filters: FilterTableFilter<Device>[] = [
   `resetLabel`, `clearAllLabel`, `anyLabel`, `yesLabel`, `noLabel`,
   `fromLabel`, `toLabel`, `savedFiltersLabel`, `saveLabel`, `saveNameLabel`, `cancelLabel`,
   `clearSavedFilterLabel`, `saveLayoutChoiceLabel`, `noLayoutLabel`, `removeLabel`
-  (chip remove prefix).
+  (chip remove prefix), `isLabel`, `isNotLabel`, `noneLabel`, `customLabel`
+  (date presets default), `conditionLabel` (picker name suffix).
 - `select` filters use `MultiCombobox`: the picked values show as chips inside the field.
 
 ## Combobox
@@ -366,6 +385,8 @@ condition, which resolves to the source barrel (~6000 dev requests).
 - `match` and `getSearchText` run in memoized row models, so signals they read don't
   re-filter; reactive inputs belong in `rows` or `filterValues`.
 - `q` is reserved for the quick search; don't use it as a filter key.
+- Relative date bounds resolve when the row model filters, which is memoized: a
+  table left open past midnight keeps the old day until filters or rows change.
 - Values are normalized (trimmed, empties dropped) before being stored or emitted.
 - Both tab panels stay mounted (`hidden`) to keep table state across tab switches.
 - Quick search and pills render in `DataTable`'s `toolbar` slot.

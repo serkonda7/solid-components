@@ -30,7 +30,10 @@ export {
 	type DataTableSortDirection,
 } from './data-table'
 export {
+	FILTER_TABLE_DATE_PRESETS,
+	FILTER_TABLE_EMPTY,
 	FilterTable,
+	type FilterTableDatePreset,
 	type FilterTableFilter,
 	type FilterTableFilterType,
 	type FilterTableProps,
@@ -38,6 +41,8 @@ export {
 	type FilterTableValue,
 	type FilterTableValues,
 	parseFilterTableRange,
+	parseFilterTableSelect,
+	resolveFilterTableDate,
 } from './filter-table'
 export {
 	Modal,

@@ -56,6 +56,12 @@ button:hover {
 	box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
 }
 
+/* The filter form's dropdowns open below their field; at the last field they
+ * extend past the card, so it must not clip them. */
+.table-card.filter-table-demo {
+	overflow: visible;
+}
+
 .table-header {
 	display: flex;
 	align-items: center;

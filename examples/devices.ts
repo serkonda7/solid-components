@@ -468,7 +468,7 @@ export const deviceFilters: FilterTableFilter<Device>[] = [
 	{ key: 'manufacturer', label: 'Manufacturer', type: 'select', group: 'Hardware' },
 	{ key: 'model', label: 'Model', type: 'select', group: 'Hardware' },
 	{ key: 'platform', label: 'Platform', type: 'select', group: 'Hardware' },
-	{ key: 'tenant', label: 'Tenant', type: 'select', group: 'Tenancy' },
+	{ key: 'tenant', label: 'Tenant', type: 'select', group: 'Tenancy', empty: true },
 	{
 		key: 'has_primary_ip',
 		label: 'Has primary IP',
