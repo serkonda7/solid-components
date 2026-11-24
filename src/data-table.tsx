@@ -288,11 +288,12 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const [internalSort, setInternalSort] = createSignal<DataTableSort | undefined>(
 		props.defaultSort,
 	)
-	const sortKey = () => (sortControlled ? read(props.sortKey ?? undefined) : internalSort()?.key)
+	const sortKey = () => (sortControlled ? read(props.sortKey) : internalSort()?.key)
 	const sortDirection = () =>
 		sortControlled ? read(props.sortDirection ?? 'asc') : (internalSort()?.direction ?? 'asc')
 	const showCustomizer = () => read(props.showColumnCustomizer ?? false)
 	const toolbar = children(() => props.toolbar)
+	const hasToolbar = createMemo(() => toolbar.toArray().length > 0)
 
 	const defaultVisibleKeys = createMemo(
 		() =>
@@ -588,6 +589,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	const resized = () => tableWidth() !== undefined
+	/** Cells per row: visible columns, actions, and the filler once resized. */
+	const columnCount = () =>
+		visibleColumns().length + (props.rowActions ? 1 : 0) + (resized() ? 1 : 0)
 	const actionsStyle = (): JSX.CSSProperties | undefined =>
 		resized() ? { width: `${extraWidth()}px` } : undefined
 
@@ -1153,14 +1157,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		return (
 			<tbody class="data-table-group">
 				<tr class="data-table-group-row">
-					<th
-						scope="rowgroup"
-						colSpan={
-							visibleColumns().length +
-							(props.rowActions ? 1 : 0) +
-							(resized() ? 1 : 0)
-						}
-					>
+					<th scope="rowgroup" colSpan={columnCount()}>
 						<button
 							type="button"
 							class="data-table-group-toggle"
@@ -1270,9 +1267,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	return (
 		<div class={cx('data-table-wrap', props.class)}>
-			<Show when={showCustomizer() || toolbar.toArray().length > 0}>
+			<Show when={showCustomizer() || hasToolbar()}>
 				<div class="data-table-toolbar">
-					<Show when={toolbar.toArray().length > 0}>
+					<Show when={hasToolbar()}>
 						<div class="data-table-toolbar-start">{toolbar()}</div>
 					</Show>
 					<Show when={showCustomizer()}>{customizer()}</Show>
@@ -1283,13 +1280,13 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					ref={tableRef}
 					class="data-table"
 					classList={{
-						'data-table-resized': tableWidth() !== undefined,
+						'data-table-resized': resized(),
 						'data-table-sticky-header': props.stickyHeader,
 						'data-table-sticky-actions': props.stickyActions,
 						'data-table-column-lines': props.columnLines,
 					}}
 					aria-busy={loading()}
-					style={tableWidth() !== undefined ? { width: `${tableWidth()}px` } : undefined}
+					style={resized() ? { width: `${tableWidth()}px` } : undefined}
 				>
 					<thead>
 						<tr>

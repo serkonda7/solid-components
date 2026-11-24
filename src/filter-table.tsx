@@ -335,9 +335,12 @@ function sameValues(a: FilterTableValues, b: FilterTableValues): boolean {
 		keys.every((key) => {
 			const x = a[key]
 			const y = b[key]
-			return Array.isArray(x) && Array.isArray(y)
-				? x.length === y.length && x.every((v) => y.includes(v))
-				: x === y
+			if (Array.isArray(x) && Array.isArray(y)) {
+				const left = new Set(x)
+				const right = new Set(y)
+				return left.size === right.size && [...left].every((value) => right.has(value))
+			}
+			return x === y
 		})
 	)
 }
@@ -757,7 +760,12 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	const groups = createMemo(() => {
 		const byGroup = new Map<string | undefined, FilterTableFilter<TRow>[]>([[undefined, []]])
 		for (const filter of local.filters) {
-			byGroup.set(filter.group, [...(byGroup.get(filter.group) ?? []), filter])
+			let members = byGroup.get(filter.group)
+			if (!members) {
+				members = []
+				byGroup.set(filter.group, members)
+			}
+			members.push(filter)
 		}
 		return [...byGroup.entries()]
 			.filter(([, filters]) => filters.length > 0)

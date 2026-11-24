@@ -30,7 +30,8 @@ export interface SearchBarProps {
 export function SearchBar(props: SearchBarProps): JSX.Element {
 	let input: HTMLInputElement | undefined
 	const shortcutKey = (): string | false => props.shortcutKey ?? 'k'
-	const hint = (): string => props.shortcutLabel ?? `Ctrl ${String(shortcutKey()).toUpperCase()}`
+	const keyLabel = (): string => String(shortcutKey()).toUpperCase()
+	const hint = (): string => props.shortcutLabel ?? `Ctrl ${keyLabel()}`
 
 	function onKeyDown(e: KeyboardEvent): void {
 		const key = shortcutKey()
@@ -54,9 +55,7 @@ export function SearchBar(props: SearchBarProps): JSX.Element {
 				placeholder={props.placeholder ?? 'Search…'}
 				aria-label={props.ariaLabel ?? 'Search'}
 				aria-keyshortcuts={
-					shortcutKey() === false
-						? undefined
-						: `Control+${String(shortcutKey()).toUpperCase()} Meta+${String(shortcutKey()).toUpperCase()}`
+					shortcutKey() === false ? undefined : `Control+${keyLabel()} Meta+${keyLabel()}`
 				}
 				onInput={(e) => props.onInput(e.currentTarget.value)}
 			/>
