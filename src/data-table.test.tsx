@@ -372,6 +372,18 @@ function pressOnHandle(container: HTMLElement, init: KeyboardEventInit): void {
 
 const edit = () => <button type="button">Edit</button>
 
+test('resizing a column keeps body cells the same width as their header', () => {
+	const container = mountTable({ resizableColumns: true })
+	pressOnHandle(container, { key: 'ArrowRight' })
+	const headerWidth =
+		container.querySelector<HTMLElement>('th[data-column-key="name"]')?.getBoundingClientRect()
+			.width ?? 0
+	const cellWidth =
+		container.querySelector<HTMLElement>('tbody td')?.getBoundingClientRect().width ?? 0
+	expect(headerWidth).toBeGreaterThan(0)
+	expect(Math.abs(cellWidth - headerWidth)).toBeLessThanOrEqual(1)
+})
+
 test('column widths can be restored', () => {
 	const container = mountTable({
 		columnWidths: { name: 200, price: 100, id: 80 },

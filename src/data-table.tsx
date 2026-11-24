@@ -1110,11 +1110,13 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		content: (column: DataTableColumn<TRow>) => JSX.Element,
 		actions: () => JSX.Element,
 	): JSX.Element {
+		// Body cells carry only the static column size: once resized the table uses
+		// `table-layout: fixed`, so the header row determines the pixel width of each column.
 		return (
 			<>
 				<For each={visibleColumns()}>
 					{(column) => (
-						<td class={column.class} style={columnStyle(column, widths()[column.key])}>
+						<td class={column.class} style={columnStyle(column)}>
 							{content(column)}
 						</td>
 					)}
