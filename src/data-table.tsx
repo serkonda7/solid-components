@@ -31,7 +31,6 @@ import {
 	createUniqueId,
 	For,
 	on,
-	onCleanup,
 	Show,
 	untrack,
 } from 'solid-js'
@@ -40,9 +39,11 @@ import {
 	cx,
 	focusOnMount,
 	isStringArray,
+	listenOnDocument,
 	loadJson,
 	read,
 	saveJson,
+	wrapIndex,
 } from './utils'
 
 export type DataTableSortDirection = 'asc' | 'desc'
@@ -204,6 +205,7 @@ export interface DataTableProps<TRow> {
 
 const MIN_COLUMN_WIDTH = 40
 const DEFAULT_SKELETON_ROWS = 5
+const collator = new Intl.Collator(undefined, { numeric: true })
 
 const features = tableFeatures({
 	rowSortingFeature,
@@ -215,10 +217,11 @@ const features = tableFeatures({
 
 function compareSortValues(left: unknown, right: unknown): number {
 	if (left === right) return 0
-	if (left == null) return -1
+	if (left == null) return right == null ? 0 : -1
 	if (right == null) return 1
+	if (left instanceof Date && right instanceof Date) return left.getTime() - right.getTime()
 	if (typeof left === 'number' && typeof right === 'number') return left - right
-	return String(left).localeCompare(String(right), undefined, { numeric: true })
+	return collator.compare(String(left), String(right))
 }
 
 /** Follows a pointer until it is released or cancelled. */
@@ -285,11 +288,12 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	const [internalSort, setInternalSort] = createSignal<DataTableSort | undefined>(
 		props.defaultSort,
 	)
-	const sortKey = () => (sortControlled ? read(props.sortKey ?? undefined) : internalSort()?.key)
+	const sortKey = () => (sortControlled ? read(props.sortKey) : internalSort()?.key)
 	const sortDirection = () =>
 		sortControlled ? read(props.sortDirection ?? 'asc') : (internalSort()?.direction ?? 'asc')
 	const showCustomizer = () => read(props.showColumnCustomizer ?? false)
 	const toolbar = children(() => props.toolbar)
+	const hasToolbar = createMemo(() => toolbar.toArray().length > 0)
 
 	const defaultVisibleKeys = createMemo(
 		() =>
@@ -585,6 +589,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 	}
 
 	const resized = () => tableWidth() !== undefined
+	/** Cells per row: visible columns, actions, and the filler once resized. */
+	const columnCount = () =>
+		visibleColumns().length + (props.rowActions ? 1 : 0) + (resized() ? 1 : 0)
 	const actionsStyle = (): JSX.CSSProperties | undefined =>
 		resized() ? { width: `${extraWidth()}px` } : undefined
 
@@ -756,17 +763,23 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		}
 		const items = layoutItems()
 		const index = items.indexOf(document.activeElement as HTMLElement)
-		const next =
-			event.key === 'ArrowDown'
-				? (index + 1) % items.length
-				: event.key === 'ArrowUp'
-					? (index - 1 + items.length) % items.length
-					: event.key === 'Home'
-						? 0
-						: event.key === 'End'
-							? items.length - 1
-							: -1
-		if (next === -1) return
+		let next: number
+		switch (event.key) {
+			case 'ArrowDown':
+				next = wrapIndex(index + 1, items.length)
+				break
+			case 'ArrowUp':
+				next = wrapIndex(index - 1, items.length)
+				break
+			case 'Home':
+				next = 0
+				break
+			case 'End':
+				next = items.length - 1
+				break
+			default:
+				return
+		}
 		event.preventDefault()
 		items[next]?.focus()
 	}
@@ -790,12 +803,8 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		function onKeyDown(event: KeyboardEvent): void {
 			if (event.key === 'Escape' && !event.defaultPrevented) setPopup(undefined)
 		}
-		document.addEventListener('pointerdown', onPointerDown)
-		document.addEventListener('keydown', onKeyDown)
-		onCleanup(() => {
-			document.removeEventListener('pointerdown', onPointerDown)
-			document.removeEventListener('keydown', onKeyDown)
-		})
+		listenOnDocument('pointerdown', onPointerDown)
+		listenOnDocument('keydown', onKeyDown)
 	})
 
 	function cell(row: TRow, column: DataTableColumn<TRow>): JSX.Element {
@@ -1110,11 +1119,13 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		content: (column: DataTableColumn<TRow>) => JSX.Element,
 		actions: () => JSX.Element,
 	): JSX.Element {
+		// Body cells carry only the static column size: once resized the table uses
+		// `table-layout: fixed`, so the header row determines the pixel width of each column.
 		return (
 			<>
 				<For each={visibleColumns()}>
 					{(column) => (
-						<td class={column.class} style={columnStyle(column, widths()[column.key])}>
+						<td class={column.class} style={columnStyle(column)}>
 							{content(column)}
 						</td>
 					)}
@@ -1146,14 +1157,7 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		return (
 			<tbody class="data-table-group">
 				<tr class="data-table-group-row">
-					<th
-						scope="rowgroup"
-						colSpan={
-							visibleColumns().length +
-							(props.rowActions ? 1 : 0) +
-							(resized() ? 1 : 0)
-						}
-					>
+					<th scope="rowgroup" colSpan={columnCount()}>
 						<button
 							type="button"
 							class="data-table-group-toggle"
@@ -1263,9 +1267,9 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 
 	return (
 		<div class={cx('data-table-wrap', props.class)}>
-			<Show when={showCustomizer() || toolbar.toArray().length > 0}>
+			<Show when={showCustomizer() || hasToolbar()}>
 				<div class="data-table-toolbar">
-					<Show when={toolbar.toArray().length > 0}>
+					<Show when={hasToolbar()}>
 						<div class="data-table-toolbar-start">{toolbar()}</div>
 					</Show>
 					<Show when={showCustomizer()}>{customizer()}</Show>
@@ -1276,13 +1280,13 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 					ref={tableRef}
 					class="data-table"
 					classList={{
-						'data-table-resized': tableWidth() !== undefined,
+						'data-table-resized': resized(),
 						'data-table-sticky-header': props.stickyHeader,
 						'data-table-sticky-actions': props.stickyActions,
 						'data-table-column-lines': props.columnLines,
 					}}
 					aria-busy={loading()}
-					style={tableWidth() !== undefined ? { width: `${tableWidth()}px` } : undefined}
+					style={resized() ? { width: `${tableWidth()}px` } : undefined}
 				>
 					<thead>
 						<tr>

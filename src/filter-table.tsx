@@ -31,9 +31,11 @@ import {
 	cx,
 	focusOnMount,
 	isStringArray,
+	listenOnDocument,
 	loadJson,
 	read,
 	saveJson,
+	wrapIndex,
 } from './utils'
 
 export type FilterTableFilterType = 'text' | 'select' | 'boolean' | 'number-range' | 'date-range'
@@ -115,7 +117,8 @@ export const FILTER_TABLE_EMPTY = '__empty__'
 const EXCLUDE_PREFIX = '!'
 const NOT_EMPTY = `${EXCLUDE_PREFIX}${FILTER_TABLE_EMPTY}`
 
-export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'toolbar'> {
+/** Props handled by `FilterTable` itself rather than forwarded to `DataTable`. */
+export interface FilterTableOwnProps<TRow> {
 	filters: FilterTableFilter<TRow>[]
 	/** Controlled applied filters; pair with `onFilterValuesChange`. */
 	filterValues?: FilterTableValues | Accessor<FilterTableValues>
@@ -188,9 +191,14 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	customLabel?: string
 }
 
+export interface FilterTableProps<TRow>
+	extends Omit<DataTableProps<TRow>, 'toolbar'>,
+		FilterTableOwnProps<TRow> {}
+
 const QUICK_SEARCH_KEY = 'q'
 const DEFAULT_MANUAL_DEBOUNCE = 300
 const RANGE_SEPARATOR = '..'
+const collator = new Intl.Collator(undefined, { numeric: true })
 /** Table column holding each row's search text, which is what the quick search filters. */
 const SEARCH_COLUMN = '__search__'
 
@@ -327,9 +335,12 @@ function sameValues(a: FilterTableValues, b: FilterTableValues): boolean {
 		keys.every((key) => {
 			const x = a[key]
 			const y = b[key]
-			return Array.isArray(x) && Array.isArray(y)
-				? x.length === y.length && x.every((v) => y.includes(v))
-				: x === y
+			if (Array.isArray(x) && Array.isArray(y)) {
+				const left = new Set(x)
+				const right = new Set(y)
+				return left.size === right.size && [...left].every((value) => right.has(value))
+			}
+			return x === y
 		})
 	)
 }
@@ -380,56 +391,67 @@ function matchesSelect(actual: unknown, value: FilterTableValue): boolean {
 	return (include.length === 0 || hit(include)) && !hit(exclude)
 }
 
+const OWN_KEYS = [
+	'filters',
+	'filterValues',
+	'defaultFilterValues',
+	'onFilterValuesChange',
+	'filterStorageKey',
+	'restoreFilters',
+	'savedFilters',
+	'onSavedFiltersChange',
+	'manualFiltering',
+	'totalCount',
+	'quickSearch',
+	'quickSearchDebounce',
+	'quickSearchShortcut',
+	'quickSearchShortcutLabel',
+	'getSearchText',
+	'quickSearchLabel',
+	'resultsLabel',
+	'filtersLabel',
+	'applyLabel',
+	'resetLabel',
+	'clearAllLabel',
+	'anyLabel',
+	'yesLabel',
+	'noLabel',
+	'fromLabel',
+	'toLabel',
+	'savedFiltersLabel',
+	'saveLabel',
+	'saveNameLabel',
+	'saveLayoutChoiceLabel',
+	'noLayoutLabel',
+	'cancelLabel',
+	'clearSavedFilterLabel',
+	'removeLabel',
+	'isLabel',
+	'isNotLabel',
+	'conditionLabel',
+	'noneLabel',
+	'customLabel',
+] as const satisfies readonly (keyof FilterTableOwnProps<unknown>)[]
+
+/** DataTable props that FilterTable handles itself instead of forwarding. */
+const INTERCEPTED_KEYS = [
+	'rows',
+	'layout',
+	'class',
+] as const satisfies readonly (keyof DataTableProps<unknown>)[]
+
+type MissingOwnKeys = Exclude<keyof FilterTableOwnProps<unknown>, (typeof OWN_KEYS)[number]>
+// Fails to compile when a FilterTableOwnProps key is missing from OWN_KEYS.
+const ownKeysComplete: [MissingOwnKeys] extends [never] ? true : never = true
+void ownKeysComplete
+
 /**
  * `DataTable` with filtering: a Results tab with a quick search and
  * removable pills for the applied filters, and a Filters tab with a grouped form
  * that is applied on submit.
  */
 export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
-	const [local, tableProps] = splitProps(props, [
-		'rows',
-		'filters',
-		'filterValues',
-		'defaultFilterValues',
-		'onFilterValuesChange',
-		'filterStorageKey',
-		'restoreFilters',
-		'savedFilters',
-		'onSavedFiltersChange',
-		'manualFiltering',
-		'totalCount',
-		'quickSearch',
-		'quickSearchDebounce',
-		'quickSearchShortcut',
-		'quickSearchShortcutLabel',
-		'getSearchText',
-		'quickSearchLabel',
-		'resultsLabel',
-		'filtersLabel',
-		'applyLabel',
-		'resetLabel',
-		'clearAllLabel',
-		'anyLabel',
-		'yesLabel',
-		'noLabel',
-		'fromLabel',
-		'toLabel',
-		'savedFiltersLabel',
-		'saveLabel',
-		'saveNameLabel',
-		'saveLayoutChoiceLabel',
-		'noLayoutLabel',
-		'cancelLabel',
-		'layout',
-		'clearSavedFilterLabel',
-		'removeLabel',
-		'isLabel',
-		'isNotLabel',
-		'conditionLabel',
-		'noneLabel',
-		'customLabel',
-		'class',
-	])
+	const [local, tableProps] = splitProps(props, [...OWN_KEYS, ...INTERCEPTED_KEYS])
 	const rows = createMemo(() => read(local.rows))
 	const anyLabel = () => local.anyLabel ?? 'Any'
 	const yesLabel = () => local.yesLabel ?? 'Yes'
@@ -608,10 +630,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					if (text !== '') seen.add(text)
 				}
 			}
-			next.set(
-				filter.key,
-				[...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-			)
+			next.set(filter.key, [...seen].sort(collator.compare))
 		}
 		return next
 	}, new Map())
@@ -741,7 +760,12 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	const groups = createMemo(() => {
 		const byGroup = new Map<string | undefined, FilterTableFilter<TRow>[]>([[undefined, []]])
 		for (const filter of local.filters) {
-			byGroup.set(filter.group, [...(byGroup.get(filter.group) ?? []), filter])
+			let members = byGroup.get(filter.group)
+			if (!members) {
+				members = []
+				byGroup.set(filter.group, members)
+			}
+			members.push(filter)
 		}
 		return [...byGroup.entries()]
 			.filter(([, filters]) => filters.length > 0)
@@ -765,7 +789,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
 		if (delta === 0) return
 		event.preventDefault()
-		const next = tabs[(tabs.indexOf(tab()) + delta + tabs.length) % tabs.length]
+		const next = tabs[wrapIndex(tabs.indexOf(tab()) + delta, tabs.length)]
 		selectTab(next)
 		document.getElementById(tabId(next))?.focus()
 	}
@@ -958,22 +982,20 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	const shortcut = (): string | false =>
 		local.quickSearch === false ? false : (local.quickSearchShortcut ?? '/')
 
-	onMount(() => {
-		const onKeyDown = (e: KeyboardEvent): void => {
-			const key = shortcut()
-			if (key === false || !searchBox?.isConnected || e.defaultPrevented) return
-			if (e.ctrlKey || e.metaKey || e.altKey || e.key !== key) return
-			if (isEditable(e.target)) return
-			// Leave an open dialog's keys alone unless the table is inside it.
-			const dialog = document.querySelector('dialog[open]')
-			if (dialog && !dialog.contains(searchBox)) return
-			e.preventDefault()
-			searchBox.focus()
-			searchBox.select()
-		}
-		document.addEventListener('keydown', onKeyDown)
-		onCleanup(() => document.removeEventListener('keydown', onKeyDown))
-	})
+	function onKeyDown(e: KeyboardEvent): void {
+		const key = shortcut()
+		if (key === false || !searchBox?.isConnected || e.defaultPrevented) return
+		if (e.ctrlKey || e.metaKey || e.altKey || e.key !== key) return
+		if (isEditable(e.target)) return
+		// Leave an open dialog's keys alone unless the table is inside it.
+		const dialog = document.querySelector('dialog[open]')
+		if (dialog && !dialog.contains(searchBox)) return
+		e.preventDefault()
+		searchBox.focus()
+		searchBox.select()
+	}
+
+	onMount(() => listenOnDocument('keydown', onKeyDown))
 
 	function quickSearchBox(): JSX.Element {
 		return (

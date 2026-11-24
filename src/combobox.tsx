@@ -3,6 +3,7 @@ import type { Component, JSX } from 'solid-js'
 import {
 	createEffect,
 	createMemo,
+	createSelector,
 	createSignal,
 	createUniqueId,
 	For,
@@ -11,7 +12,7 @@ import {
 	splitProps,
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
-import { cx } from './utils'
+import { cx, wrapIndex } from './utils'
 
 /** Icon component rendered before an option label, e.g. one from `@tabler/icons-solidjs`. */
 export type ComboboxIcon = Component<{ size?: number }>
@@ -136,23 +137,24 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 	const [active, setActive] = createSignal(0)
 	// Last pointer position over the list; cleared by keyboard navigation.
 	const [cursor, setCursor] = createSignal<{ x: number; y: number }>()
+	const isActive = createSelector(active)
+	const isSelected = createSelector(() => props.value)
 
 	const values = (): string[] => props.values ?? []
 	const choices = createMemo((): ComboboxOption[] => {
 		if (multiple) {
-			return props.options.filter((o) => !values().includes(String(o.value)))
+			const picked = new Set(values())
+			return props.options.filter((o) => !picked.has(String(o.value)))
 		}
 		return props.emptyLabel === undefined
 			? props.options
 			: [{ value: '', label: props.emptyLabel }, ...props.options]
 	})
+	const optionsByValue = createMemo(() => new Map(props.options.map((o) => [String(o.value), o])))
 	const selected = createMemo(() =>
-		multiple || props.value === ''
-			? undefined
-			: choices().find((o) => String(o.value) === props.value),
+		multiple || props.value === '' ? undefined : optionsByValue().get(props.value),
 	)
-	const optionOf = (value: string): ComboboxOption | undefined =>
-		props.options.find((o) => String(o.value) === value)
+	const optionOf = (value: string): ComboboxOption | undefined => optionsByValue().get(value)
 	const filtered = createMemo((): ComboboxOption[] => {
 		const needle = query().trim().toLowerCase()
 		return needle === ''
@@ -228,7 +230,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 		if (!open()) {
 			show()
 		} else if (total > 0) {
-			setActive((active() + delta + total) % total)
+			setActive(wrapIndex(active() + delta, total))
 		}
 	}
 
@@ -287,10 +289,10 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 				id={optionId(index())}
 				data-index={index()}
 				role="option"
-				aria-selected={!multiple && String(option.value) === props.value}
+				aria-selected={!multiple && isSelected(String(option.value))}
 				classList={{
 					'combobox-option': true,
-					'combobox-option-active': index() === active(),
+					'combobox-option-active': isActive(index()),
 					'combobox-option-empty': option.value === '',
 				}}
 				// Keep focus in the input so blur doesn't close the list first.
@@ -327,7 +329,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 				classList={{
 					'combobox-option': true,
 					'combobox-option-add': true,
-					'combobox-option-active': addIndex() === active(),
+					'combobox-option-active': isActive(addIndex()),
 				}}
 				onMouseDown={(e) => e.preventDefault()}
 				onMouseMove={() => setActive(addIndex())}

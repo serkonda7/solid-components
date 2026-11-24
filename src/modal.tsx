@@ -88,14 +88,17 @@ function ModalDialog(props: ModalProps): JSX.Element {
 		}
 	}
 
+	/** Escape and other cancel requests (e.g. the Android back gesture). */
+	function requestEscapeClose(): void {
+		if (props.closeOnEscape !== false) requestClose()
+	}
+
 	function onKeyDown(e: KeyboardEvent): void {
 		if (e.key !== 'Escape') return
 		// Also suppresses the native cancel, so the dialog only closes through `open`.
 		e.preventDefault()
 		e.stopPropagation()
-		if (props.closeOnEscape !== false) {
-			requestClose()
-		}
+		requestEscapeClose()
 	}
 
 	return (
@@ -109,9 +112,7 @@ function ModalDialog(props: ModalProps): JSX.Element {
 			// Other close requests (e.g. the Android back gesture) arrive as `cancel`.
 			onCancel={(e) => {
 				e.preventDefault()
-				if (props.closeOnEscape !== false) {
-					requestClose()
-				}
+				requestEscapeClose()
 			}}
 			// Closed natively anyway (e.g. `<form method="dialog">`): too late to veto, report it.
 			onClose={() => {

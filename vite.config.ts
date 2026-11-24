@@ -5,6 +5,8 @@ import { tablerIcons } from './src/vite.ts'
 export default defineConfig(({ mode }) => ({
 	plugins: [tablerIcons(), solidPlugin()],
 	build: {
+		// scripts/build.ts clears dist/ itself: the build steps run concurrently.
+		emptyOutDir: false,
 		lib: {
 			entry: './src/index.ts',
 			formats: ['es'],

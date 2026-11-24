@@ -25,8 +25,8 @@ No built-in row selection: render checkboxes in `getCell`, keep ids in the consu
 
 - Uncontrolled: the table sorts `rows`, starting from `defaultSort`. Values come
   from `column.sortValue(row)`, else `row[column.key]`; numbers compare
-  numerically, the rest via `localeCompare` with `numeric: true`,
-  `null`/`undefined` first.
+  numerically, `Date`s chronologically, the rest via `localeCompare` with
+  `numeric: true`, `null`/`undefined` first.
 - Controlled (`sortKey` or `sortDirection` set): the consumer sorts `rows`.
   Sort buttons need `onSort(key)` (consumer cycles) or `onSortChange(sort | undefined)`.
 - `onSortClear` fires on reaching unsorted. All callbacks also fire uncontrolled.

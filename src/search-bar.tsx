@@ -1,7 +1,7 @@
 import { IconSearch, IconX } from '@tabler/icons-solidjs'
 import type { JSX } from 'solid-js'
-import { onCleanup, onMount, Show } from 'solid-js'
-import { cx } from './utils'
+import { onMount, Show } from 'solid-js'
+import { cx, listenOnDocument } from './utils'
 
 export interface SearchBarProps {
 	value: string
@@ -30,21 +30,20 @@ export interface SearchBarProps {
 export function SearchBar(props: SearchBarProps): JSX.Element {
 	let input: HTMLInputElement | undefined
 	const shortcutKey = (): string | false => props.shortcutKey ?? 'k'
-	const hint = (): string => props.shortcutLabel ?? `Ctrl ${String(shortcutKey()).toUpperCase()}`
+	const keyLabel = (): string => String(shortcutKey()).toUpperCase()
+	const hint = (): string => props.shortcutLabel ?? `Ctrl ${keyLabel()}`
 
-	onMount(() => {
-		const onKeyDown = (e: KeyboardEvent): void => {
-			const key = shortcutKey()
-			if (key === false || !input) return
-			if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
-			if (e.key.toLowerCase() !== key.toLowerCase()) return
-			e.preventDefault()
-			input.focus()
-			input.select()
-		}
-		document.addEventListener('keydown', onKeyDown)
-		onCleanup(() => document.removeEventListener('keydown', onKeyDown))
-	})
+	function onKeyDown(e: KeyboardEvent): void {
+		const key = shortcutKey()
+		if (key === false || !input) return
+		if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+		if (e.key.toLowerCase() !== key.toLowerCase()) return
+		e.preventDefault()
+		input.focus()
+		input.select()
+	}
+
+	onMount(() => listenOnDocument('keydown', onKeyDown))
 
 	return (
 		<div class={cx('search-bar', props.class)}>
@@ -56,9 +55,7 @@ export function SearchBar(props: SearchBarProps): JSX.Element {
 				placeholder={props.placeholder ?? 'Search…'}
 				aria-label={props.ariaLabel ?? 'Search'}
 				aria-keyshortcuts={
-					shortcutKey() === false
-						? undefined
-						: `Control+${String(shortcutKey()).toUpperCase()} Meta+${String(shortcutKey()).toUpperCase()}`
+					shortcutKey() === false ? undefined : `Control+${keyLabel()} Meta+${keyLabel()}`
 				}
 				onInput={(e) => props.onInput(e.currentTarget.value)}
 			/>
