@@ -204,6 +204,7 @@ export interface DataTableProps<TRow> {
 
 const MIN_COLUMN_WIDTH = 40
 const DEFAULT_SKELETON_ROWS = 5
+const collator = new Intl.Collator(undefined, { numeric: true })
 
 const features = tableFeatures({
 	rowSortingFeature,
@@ -219,7 +220,7 @@ function compareSortValues(left: unknown, right: unknown): number {
 	if (right == null) return 1
 	if (left instanceof Date && right instanceof Date) return left.getTime() - right.getTime()
 	if (typeof left === 'number' && typeof right === 'number') return left - right
-	return String(left).localeCompare(String(right), undefined, { numeric: true })
+	return collator.compare(String(left), String(right))
 }
 
 /** Follows a pointer until it is released or cancelled. */

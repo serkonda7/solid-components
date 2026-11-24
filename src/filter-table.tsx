@@ -191,6 +191,7 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 const QUICK_SEARCH_KEY = 'q'
 const DEFAULT_MANUAL_DEBOUNCE = 300
 const RANGE_SEPARATOR = '..'
+const collator = new Intl.Collator(undefined, { numeric: true })
 /** Table column holding each row's search text, which is what the quick search filters. */
 const SEARCH_COLUMN = '__search__'
 
@@ -608,10 +609,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 					if (text !== '') seen.add(text)
 				}
 			}
-			next.set(
-				filter.key,
-				[...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-			)
+			next.set(filter.key, [...seen].sort(collator.compare))
 		}
 		return next
 	}, new Map())
