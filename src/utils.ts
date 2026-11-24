@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js'
-import { createMemo, createSignal } from 'solid-js'
+import { createMemo, createSignal, onCleanup } from 'solid-js'
 
 /** The value of a prop that takes a value or an accessor. */
 export function read<T>(value: T | Accessor<T>): T {
@@ -14,6 +14,20 @@ export function cx(...names: (string | false | undefined)[]): string {
 /** Focuses `el` once it is in the document; use as a `ref`. */
 export function focusOnMount(el: HTMLElement): void {
 	queueMicrotask(() => el.focus())
+}
+
+/** Adds a document listener that lives as long as the current owner. */
+export function listenOnDocument<K extends keyof DocumentEventMap>(
+	type: K,
+	handler: (event: DocumentEventMap[K]) => void,
+): void {
+	document.addEventListener(type, handler)
+	onCleanup(() => document.removeEventListener(type, handler))
+}
+
+/** Wraps `index` into `0..length-1`, including negative indices. */
+export function wrapIndex(index: number, length: number): number {
+	return ((index % length) + length) % length
 }
 
 /**

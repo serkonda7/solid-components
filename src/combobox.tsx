@@ -12,7 +12,7 @@ import {
 	splitProps,
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
-import { cx } from './utils'
+import { cx, wrapIndex } from './utils'
 
 /** Icon component rendered before an option label, e.g. one from `@tabler/icons-solidjs`. */
 export type ComboboxIcon = Component<{ size?: number }>
@@ -230,7 +230,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 		if (!open()) {
 			show()
 		} else if (total > 0) {
-			setActive((active() + delta + total) % total)
+			setActive(wrapIndex(active() + delta, total))
 		}
 	}
 

@@ -31,9 +31,11 @@ import {
 	cx,
 	focusOnMount,
 	isStringArray,
+	listenOnDocument,
 	loadJson,
 	read,
 	saveJson,
+	wrapIndex,
 } from './utils'
 
 export type FilterTableFilterType = 'text' | 'select' | 'boolean' | 'number-range' | 'date-range'
@@ -779,7 +781,7 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
 		if (delta === 0) return
 		event.preventDefault()
-		const next = tabs[(tabs.indexOf(tab()) + delta + tabs.length) % tabs.length]
+		const next = tabs[wrapIndex(tabs.indexOf(tab()) + delta, tabs.length)]
 		selectTab(next)
 		document.getElementById(tabId(next))?.focus()
 	}
@@ -972,22 +974,20 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 	const shortcut = (): string | false =>
 		local.quickSearch === false ? false : (local.quickSearchShortcut ?? '/')
 
-	onMount(() => {
-		const onKeyDown = (e: KeyboardEvent): void => {
-			const key = shortcut()
-			if (key === false || !searchBox?.isConnected || e.defaultPrevented) return
-			if (e.ctrlKey || e.metaKey || e.altKey || e.key !== key) return
-			if (isEditable(e.target)) return
-			// Leave an open dialog's keys alone unless the table is inside it.
-			const dialog = document.querySelector('dialog[open]')
-			if (dialog && !dialog.contains(searchBox)) return
-			e.preventDefault()
-			searchBox.focus()
-			searchBox.select()
-		}
-		document.addEventListener('keydown', onKeyDown)
-		onCleanup(() => document.removeEventListener('keydown', onKeyDown))
-	})
+	function onKeyDown(e: KeyboardEvent): void {
+		const key = shortcut()
+		if (key === false || !searchBox?.isConnected || e.defaultPrevented) return
+		if (e.ctrlKey || e.metaKey || e.altKey || e.key !== key) return
+		if (isEditable(e.target)) return
+		// Leave an open dialog's keys alone unless the table is inside it.
+		const dialog = document.querySelector('dialog[open]')
+		if (dialog && !dialog.contains(searchBox)) return
+		e.preventDefault()
+		searchBox.focus()
+		searchBox.select()
+	}
+
+	onMount(() => listenOnDocument('keydown', onKeyDown))
 
 	function quickSearchBox(): JSX.Element {
 		return (

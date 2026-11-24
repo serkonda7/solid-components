@@ -1,7 +1,7 @@
 import { IconSearch, IconX } from '@tabler/icons-solidjs'
 import type { JSX } from 'solid-js'
-import { onCleanup, onMount, Show } from 'solid-js'
-import { cx } from './utils'
+import { onMount, Show } from 'solid-js'
+import { cx, listenOnDocument } from './utils'
 
 export interface SearchBarProps {
 	value: string
@@ -32,19 +32,17 @@ export function SearchBar(props: SearchBarProps): JSX.Element {
 	const shortcutKey = (): string | false => props.shortcutKey ?? 'k'
 	const hint = (): string => props.shortcutLabel ?? `Ctrl ${String(shortcutKey()).toUpperCase()}`
 
-	onMount(() => {
-		const onKeyDown = (e: KeyboardEvent): void => {
-			const key = shortcutKey()
-			if (key === false || !input) return
-			if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
-			if (e.key.toLowerCase() !== key.toLowerCase()) return
-			e.preventDefault()
-			input.focus()
-			input.select()
-		}
-		document.addEventListener('keydown', onKeyDown)
-		onCleanup(() => document.removeEventListener('keydown', onKeyDown))
-	})
+	function onKeyDown(e: KeyboardEvent): void {
+		const key = shortcutKey()
+		if (key === false || !input) return
+		if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+		if (e.key.toLowerCase() !== key.toLowerCase()) return
+		e.preventDefault()
+		input.focus()
+		input.select()
+	}
+
+	onMount(() => listenOnDocument('keydown', onKeyDown))
 
 	return (
 		<div class={cx('search-bar', props.class)}>

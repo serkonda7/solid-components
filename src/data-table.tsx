@@ -31,7 +31,6 @@ import {
 	createUniqueId,
 	For,
 	on,
-	onCleanup,
 	Show,
 	untrack,
 } from 'solid-js'
@@ -40,9 +39,11 @@ import {
 	cx,
 	focusOnMount,
 	isStringArray,
+	listenOnDocument,
 	loadJson,
 	read,
 	saveJson,
+	wrapIndex,
 } from './utils'
 
 export type DataTableSortDirection = 'asc' | 'desc'
@@ -758,17 +759,23 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		}
 		const items = layoutItems()
 		const index = items.indexOf(document.activeElement as HTMLElement)
-		const next =
-			event.key === 'ArrowDown'
-				? (index + 1) % items.length
-				: event.key === 'ArrowUp'
-					? (index - 1 + items.length) % items.length
-					: event.key === 'Home'
-						? 0
-						: event.key === 'End'
-							? items.length - 1
-							: -1
-		if (next === -1) return
+		let next: number
+		switch (event.key) {
+			case 'ArrowDown':
+				next = wrapIndex(index + 1, items.length)
+				break
+			case 'ArrowUp':
+				next = wrapIndex(index - 1, items.length)
+				break
+			case 'Home':
+				next = 0
+				break
+			case 'End':
+				next = items.length - 1
+				break
+			default:
+				return
+		}
 		event.preventDefault()
 		items[next]?.focus()
 	}
@@ -792,12 +799,8 @@ export function DataTable<TRow>(props: DataTableProps<TRow>): JSX.Element {
 		function onKeyDown(event: KeyboardEvent): void {
 			if (event.key === 'Escape' && !event.defaultPrevented) setPopup(undefined)
 		}
-		document.addEventListener('pointerdown', onPointerDown)
-		document.addEventListener('keydown', onKeyDown)
-		onCleanup(() => {
-			document.removeEventListener('pointerdown', onPointerDown)
-			document.removeEventListener('keydown', onKeyDown)
-		})
+		listenOnDocument('pointerdown', onPointerDown)
+		listenOnDocument('keydown', onKeyDown)
 	})
 
 	function cell(row: TRow, column: DataTableColumn<TRow>): JSX.Element {
