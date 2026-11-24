@@ -91,6 +91,33 @@ test('clicking a header cycles asc, desc, unsorted', () => {
 	expect(columnText(container, 0)).toEqual(['B', 'A', 'C'])
 })
 
+test('Date values sort chronologically, not by weekday name', () => {
+	type DateRow = { id: number; day: Date; label: string }
+	const dateRows: DateRow[] = [
+		{ id: 1, day: new Date(2026, 10, 24), label: 'Tue 24' },
+		{ id: 2, day: new Date(2026, 10, 26), label: 'Thu 26' },
+		{ id: 3, day: new Date(2026, 10, 23), label: 'Mon 23' },
+	]
+	const dateColumns: DataTableColumn<DateRow>[] = [
+		{ key: 'day', label: 'Day', sortable: true, getValue: (row) => row.label },
+	]
+	const container = document.createElement('div')
+	document.body.append(container)
+	dispose = render(
+		() => <DataTable rows={dateRows} columns={dateColumns} getRowId={(row) => row.id} />,
+		container,
+	)
+
+	expect(columnText(container, 0)).toEqual(['Tue 24', 'Thu 26', 'Mon 23'])
+	const day = sortButton(container, 'Day')
+	day.click()
+	expect(columnText(container, 0)).toEqual(['Mon 23', 'Tue 24', 'Thu 26'])
+	day.click()
+	expect(columnText(container, 0)).toEqual(['Thu 26', 'Tue 24', 'Mon 23'])
+	day.click()
+	expect(columnText(container, 0)).toEqual(['Tue 24', 'Thu 26', 'Mon 23'])
+})
+
 function headers(container: HTMLElement): string[] {
 	return [...container.querySelectorAll('thead th')].map((th) => th.textContent ?? '')
 }

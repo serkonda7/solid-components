@@ -215,8 +215,9 @@ const features = tableFeatures({
 
 function compareSortValues(left: unknown, right: unknown): number {
 	if (left === right) return 0
-	if (left == null) return -1
+	if (left == null) return right == null ? 0 : -1
 	if (right == null) return 1
+	if (left instanceof Date && right instanceof Date) return left.getTime() - right.getTime()
 	if (typeof left === 'number' && typeof right === 'number') return left - right
 	return String(left).localeCompare(String(right), undefined, { numeric: true })
 }
