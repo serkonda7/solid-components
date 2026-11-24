@@ -115,7 +115,8 @@ export const FILTER_TABLE_EMPTY = '__empty__'
 const EXCLUDE_PREFIX = '!'
 const NOT_EMPTY = `${EXCLUDE_PREFIX}${FILTER_TABLE_EMPTY}`
 
-export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'toolbar'> {
+/** Props handled by `FilterTable` itself rather than forwarded to `DataTable`. */
+export interface FilterTableOwnProps<TRow> {
 	filters: FilterTableFilter<TRow>[]
 	/** Controlled applied filters; pair with `onFilterValuesChange`. */
 	filterValues?: FilterTableValues | Accessor<FilterTableValues>
@@ -187,6 +188,10 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	/** The date presets picker's entry for a typed range. Defaults to `Custom range`. */
 	customLabel?: string
 }
+
+export interface FilterTableProps<TRow>
+	extends Omit<DataTableProps<TRow>, 'toolbar'>,
+		FilterTableOwnProps<TRow> {}
 
 const QUICK_SEARCH_KEY = 'q'
 const DEFAULT_MANUAL_DEBOUNCE = 300
@@ -381,56 +386,67 @@ function matchesSelect(actual: unknown, value: FilterTableValue): boolean {
 	return (include.length === 0 || hit(include)) && !hit(exclude)
 }
 
+const OWN_KEYS = [
+	'filters',
+	'filterValues',
+	'defaultFilterValues',
+	'onFilterValuesChange',
+	'filterStorageKey',
+	'restoreFilters',
+	'savedFilters',
+	'onSavedFiltersChange',
+	'manualFiltering',
+	'totalCount',
+	'quickSearch',
+	'quickSearchDebounce',
+	'quickSearchShortcut',
+	'quickSearchShortcutLabel',
+	'getSearchText',
+	'quickSearchLabel',
+	'resultsLabel',
+	'filtersLabel',
+	'applyLabel',
+	'resetLabel',
+	'clearAllLabel',
+	'anyLabel',
+	'yesLabel',
+	'noLabel',
+	'fromLabel',
+	'toLabel',
+	'savedFiltersLabel',
+	'saveLabel',
+	'saveNameLabel',
+	'saveLayoutChoiceLabel',
+	'noLayoutLabel',
+	'cancelLabel',
+	'clearSavedFilterLabel',
+	'removeLabel',
+	'isLabel',
+	'isNotLabel',
+	'conditionLabel',
+	'noneLabel',
+	'customLabel',
+] as const satisfies readonly (keyof FilterTableOwnProps<unknown>)[]
+
+/** DataTable props that FilterTable handles itself instead of forwarding. */
+const INTERCEPTED_KEYS = [
+	'rows',
+	'layout',
+	'class',
+] as const satisfies readonly (keyof DataTableProps<unknown>)[]
+
+type MissingOwnKeys = Exclude<keyof FilterTableOwnProps<unknown>, (typeof OWN_KEYS)[number]>
+// Fails to compile when a FilterTableOwnProps key is missing from OWN_KEYS.
+const ownKeysComplete: [MissingOwnKeys] extends [never] ? true : never = true
+void ownKeysComplete
+
 /**
  * `DataTable` with filtering: a Results tab with a quick search and
  * removable pills for the applied filters, and a Filters tab with a grouped form
  * that is applied on submit.
  */
 export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
-	const [local, tableProps] = splitProps(props, [
-		'rows',
-		'filters',
-		'filterValues',
-		'defaultFilterValues',
-		'onFilterValuesChange',
-		'filterStorageKey',
-		'restoreFilters',
-		'savedFilters',
-		'onSavedFiltersChange',
-		'manualFiltering',
-		'totalCount',
-		'quickSearch',
-		'quickSearchDebounce',
-		'quickSearchShortcut',
-		'quickSearchShortcutLabel',
-		'getSearchText',
-		'quickSearchLabel',
-		'resultsLabel',
-		'filtersLabel',
-		'applyLabel',
-		'resetLabel',
-		'clearAllLabel',
-		'anyLabel',
-		'yesLabel',
-		'noLabel',
-		'fromLabel',
-		'toLabel',
-		'savedFiltersLabel',
-		'saveLabel',
-		'saveNameLabel',
-		'saveLayoutChoiceLabel',
-		'noLayoutLabel',
-		'cancelLabel',
-		'layout',
-		'clearSavedFilterLabel',
-		'removeLabel',
-		'isLabel',
-		'isNotLabel',
-		'conditionLabel',
-		'noneLabel',
-		'customLabel',
-		'class',
-	])
+	const [local, tableProps] = splitProps(props, [...OWN_KEYS, ...INTERCEPTED_KEYS])
 	const rows = createMemo(() => read(local.rows))
 	const anyLabel = () => local.anyLabel ?? 'Any'
 	const yesLabel = () => local.yesLabel ?? 'Yes'
