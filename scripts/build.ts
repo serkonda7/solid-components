@@ -1,40 +1,48 @@
+import { rmSync } from 'node:fs'
+
 const production = Bun.argv.includes('--prod')
 
-const build = Bun.spawnSync(
-	[
-		'bunx',
-		'vite',
-		'build',
-		'--config',
-		'vite.config.ts',
-		'--mode',
-		production ? 'production' : 'development',
-	],
-	{ stdio: ['inherit', 'inherit', 'inherit'] },
-)
+// Vite empties its outDir by default; do it up front so the concurrent steps
+// below don't delete files another step has already written.
+rmSync('dist', { recursive: true, force: true })
 
-if (build.exitCode !== 0) process.exit(build.exitCode)
+const spawn = (args: string[]) =>
+	Bun.spawn(['bunx', ...args], { stdio: ['inherit', 'inherit', 'inherit'] }).exited
 
-const declaration = Bun.spawnSync(['bunx', 'tsc', '--project', 'tsconfig.build.json'], {
-	stdio: ['inherit', 'inherit', 'inherit'],
-})
-
-if (declaration.exitCode !== 0) process.exit(declaration.exitCode)
+const vite = spawn([
+	'vite',
+	'build',
+	'--config',
+	'vite.config.ts',
+	'--mode',
+	production ? 'production' : 'development',
+])
+const declaration = spawn(['tsc', '--project', 'tsconfig.build.json'])
 
 // The Vite plugin runs in Node, so it is bundled separately from the browser entry.
-const plugin = await Bun.build({
-	entrypoints: ['./src/vite.ts'],
-	outdir: './dist',
-	target: 'node',
-	format: 'esm',
-	packages: 'external',
-	minify: production,
-})
-if (!plugin.success) {
-	for (const log of plugin.logs) console.error(log)
-	process.exit(1)
-}
+const plugin = (async () => {
+	const built = await Bun.build({
+		entrypoints: ['./src/vite.ts'],
+		outdir: './dist',
+		target: 'node',
+		format: 'esm',
+		packages: 'external',
+		minify: production,
+	})
+	if (built.success) return 0
+	for (const log of built.logs) console.error(log)
+	return 1
+})()
 
-await Bun.write('./dist/styles.css', Bun.file('./src/styles.css'))
+const styles = Bun.write('./dist/styles.css', Bun.file('./src/styles.css')).then(() => 0)
 
-export {}
+// Wait for every step so no output is cut off, then report the first failure.
+const codes = await Promise.all(
+	[vite, declaration, plugin, styles].map((step) =>
+		Promise.resolve(step).catch((error: unknown) => {
+			console.error(error)
+			return 1
+		}),
+	),
+)
+process.exitCode = codes.find((code) => code !== 0) ?? 0
