@@ -65,21 +65,24 @@ export function tablerIcons(): Plugin {
 
 			const out = code.replace(
 				NAMED_IMPORT_RE,
-				(_stmt, typeOnly: string | undefined, specs: string) => {
-					if (typeOnly) return ''
-					return specs
-						.split(',')
-						.map((spec) => spec.trim())
-						.filter((spec) => spec !== '' && !spec.startsWith('type '))
-						.map((spec) => {
-							const [name = '', local = name] = spec.split(/\s+as\s+/)
-							const iconFile = join(dir, `${name}.js`)
-							if (!ICON_NAME_RE.test(name) || !existsSync(iconFile)) {
-								this.error(`${file}: '${name}' is not a ${PKG} icon`)
-							}
-							return `import ${local} from ${JSON.stringify(iconFile)};`
-						})
-						.join('\n')
+				(stmt, typeOnly: string | undefined, specs: string) => {
+					const newlines = '\n'.repeat((stmt.match(/\n/g) ?? []).length)
+					if (typeOnly) return newlines
+					return (
+						specs
+							.split(',')
+							.map((spec) => spec.trim())
+							.filter((spec) => spec !== '' && !spec.startsWith('type '))
+							.map((spec) => {
+								const [name = '', local = name] = spec.split(/\s+as\s+/)
+								const iconFile = join(dir, `${name}.js`)
+								if (!ICON_NAME_RE.test(name) || !existsSync(iconFile)) {
+									this.error(`${file}: '${name}' is not a ${PKG} icon`)
+								}
+								return `import ${local} from ${JSON.stringify(iconFile)};`
+							})
+							.join(' ') + newlines
+					)
 				},
 			)
 			if (LEFTOVER_RE.test(out)) {
