@@ -387,7 +387,8 @@ export default function App() {
 							Device inventory: quick search, a grouped filter form, removable filter
 							pills, saved filters, saved column layouts, and column order and widths
 							(kept in localStorage). The preset saved filters "Arista inventory" and
-							"Monitored in Europe" also apply a saved layout.
+							"Monitored in Europe" also apply a saved layout. Press <kbd>/</kbd>{' '}
+							anywhere to focus the quick search.
 						</p>
 
 						<section class="table-card filter-table-demo">

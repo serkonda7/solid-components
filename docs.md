@@ -182,6 +182,10 @@ const filters: FilterTableFilter<Device>[] = [
   contains every whitespace-separated word, case-insensitive, in any order; hide it
   with `quickSearch={false}`. `quickSearchDebounce` (ms, default 300 with
   `manualFiltering`, else 0) delays applying it; Enter applies at once.
+- `/` focuses the quick search from anywhere on the page, except while typing in
+  another field or while a dialog outside the table is open; Escape in the empty
+  input leaves it. `quickSearchShortcut` changes the key, `false` disables it and
+  its hint; `quickSearchShortcutLabel` overrides the hint, hidden on `(pointer: coarse)`.
 - State is `FilterTableValues`: `{ [filterKey]: string | string[], q }`, inactive
   filters omitted, so it maps onto URL params. Use `defaultFilterValues`, or
   control with `filterValues`. `onFilterValuesChange` always fires.

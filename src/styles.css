@@ -944,6 +944,31 @@ scroll away with the table. */
 	padding-left: 1.9rem;
 }
 
+.filter-table-search-shortcut {
+	position: absolute;
+	top: 50%;
+	right: 0.5rem;
+	transform: translateY(-50%);
+	padding: 0.05rem 0.4rem;
+	border: 1px solid
+		var(--filter-table-border, var(--border, light-dark(#d0d0d0, #3a3e45)));
+	border-radius: 6px;
+	color: var(
+		--filter-table-muted,
+		var(--text-secondary, light-dark(#616161, #9b9da5))
+	);
+	font-family: inherit;
+	font-size: 0.75rem;
+	pointer-events: none;
+	user-select: none;
+}
+
+@media (pointer: coarse) {
+	.filter-table-search-shortcut {
+		display: none;
+	}
+}
+
 .filter-table-search-icon {
 	position: absolute;
 	top: 50%;

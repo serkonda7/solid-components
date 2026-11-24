@@ -19,6 +19,7 @@ import {
 	For,
 	on,
 	onCleanup,
+	onMount,
 	Show,
 	splitProps,
 	untrack,
@@ -144,6 +145,13 @@ export interface FilterTableProps<TRow> extends Omit<DataTableProps<TRow>, 'tool
 	quickSearch?: boolean
 	/** Milliseconds to wait after typing before searching. Defaults to 300 with `manualFiltering`, else 0. */
 	quickSearchDebounce?: number
+	/**
+	 * Key that focuses the quick search from anywhere on the page, unless typing
+	 * in another field. Defaults to `/`; `false` disables the shortcut and its hint.
+	 */
+	quickSearchShortcut?: string | false
+	/** Text of the shortcut hint shown while empty. Defaults to the key. */
+	quickSearchShortcutLabel?: string
 	/** Text matched by the quick search; defaults to the row's column values. */
 	getSearchText?: (row: TRow) => string
 	quickSearchLabel?: string
@@ -392,6 +400,8 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		'totalCount',
 		'quickSearch',
 		'quickSearchDebounce',
+		'quickSearchShortcut',
+		'quickSearchShortcutLabel',
 		'getSearchText',
 		'quickSearchLabel',
 		'resultsLabel',
@@ -944,21 +954,52 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 		return multiField(filter)
 	}
 
+	let searchBox: HTMLInputElement | undefined
+	const shortcut = (): string | false =>
+		local.quickSearch === false ? false : (local.quickSearchShortcut ?? '/')
+
+	onMount(() => {
+		const onKeyDown = (e: KeyboardEvent): void => {
+			const key = shortcut()
+			if (key === false || !searchBox?.isConnected || e.defaultPrevented) return
+			if (e.ctrlKey || e.metaKey || e.altKey || e.key !== key) return
+			if (isEditable(e.target)) return
+			// Leave an open dialog's keys alone unless the table is inside it.
+			const dialog = document.querySelector('dialog[open]')
+			if (dialog && !dialog.contains(searchBox)) return
+			e.preventDefault()
+			searchBox.focus()
+			searchBox.select()
+		}
+		document.addEventListener('keydown', onKeyDown)
+		onCleanup(() => document.removeEventListener('keydown', onKeyDown))
+	})
+
 	function quickSearchBox(): JSX.Element {
 		return (
 			<div class="filter-table-search">
 				<IconSearch class="filter-table-search-icon" size={16} aria-hidden="true" />
 				<input
+					ref={searchBox}
 					type="search"
 					class="filter-table-input"
 					aria-label={quickSearchLabel()}
+					aria-keyshortcuts={shortcut() || undefined}
 					placeholder={quickSearchLabel()}
 					value={searchInput()}
 					onInput={(e) => onSearchInput(e.currentTarget.value)}
 					onKeyDown={(e) => {
 						if (e.key === 'Enter') flushSearch()
+						if (e.key === 'Escape' && !searchInput()) e.currentTarget.blur()
 					}}
 				/>
+				<Show when={!searchInput() && shortcut()}>
+					{(key) => (
+						<kbd class="filter-table-search-shortcut">
+							{local.quickSearchShortcutLabel ?? key()}
+						</kbd>
+					)}
+				</Show>
 			</div>
 		)
 	}
@@ -1193,5 +1234,16 @@ export function FilterTable<TRow>(props: FilterTableProps<TRow>): JSX.Element {
 				{filterForm()}
 			</div>
 		</div>
+	)
+}
+
+/** Whether keys typed at `target` go into a field rather than the page. */
+function isEditable(target: EventTarget | null): boolean {
+	if (!(target instanceof HTMLElement)) return false
+	return (
+		target.isContentEditable ||
+		target instanceof HTMLInputElement ||
+		target instanceof HTMLTextAreaElement ||
+		target instanceof HTMLSelectElement
 	)
 }
