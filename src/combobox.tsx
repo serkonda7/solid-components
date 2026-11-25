@@ -75,6 +75,10 @@ export interface MultiComboboxProps extends ComboboxBaseProps {
 	onChange?: (values: string[]) => void
 	/** Accessible name of a chip's remove button. Defaults to `Remove <label>`. */
 	removeLabel?: (label: string) => string
+	/** Chips can be dragged into a new order, which `onChange` receives. */
+	sortable?: boolean
+	/** Rendered at the start of a chip, e.g. a marker on the first one. */
+	chipStart?: (value: string, index: number) => JSX.Element
 }
 
 /** Internal props: single mode passes `value`, multi mode `multiple` and `values`. */
@@ -85,8 +89,11 @@ interface ComboboxCoreProps extends ComboboxBaseProps {
 	/** Single mode: the new value. Multi mode: the value to add. */
 	onChange?: (value: string) => void
 	onRemove?: (value: string) => void
+	onReorder?: (values: string[]) => void
 	emptyLabel?: string
 	removeLabel?: (label: string) => string
+	sortable?: boolean
+	chipStart?: (value: string, index: number) => JSX.Element
 }
 
 /**
@@ -140,7 +147,10 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 	const isActive = createSelector(active)
 	const isSelected = createSelector(() => props.value)
 
-	const values = (): string[] => props.values ?? []
+	// Chip order while a chip is dragged; committed on drop.
+	const [dragOrder, setDragOrder] = createSignal<string[]>()
+	const [dragged, setDragged] = createSignal<string>()
+	const values = (): string[] => dragOrder() ?? props.values ?? []
 	const choices = createMemo((): ComboboxOption[] => {
 		if (multiple) {
 			const picked = new Set(values())
@@ -374,10 +384,63 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 		/>
 	)
 
-	function chip(value: string): JSX.Element {
+	const sortable = (): boolean => props.sortable === true && editable()
+
+	/** Moves the dragged chip before or after `target`, by the pointer's side of it. */
+	function dragOver(e: DragEvent, target: string): void {
+		const value = dragged()
+		if (value === undefined) {
+			return
+		}
+		e.preventDefault()
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+		if (value === target) {
+			return
+		}
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+		const after = e.clientX > rect.left + rect.width / 2
+		const order = values().filter((v) => v !== value)
+		const index = order.indexOf(target) + (after ? 1 : 0)
+		order.splice(index, 0, value)
+		if (order.some((v, i) => v !== values()[i])) {
+			setDragOrder(order)
+		}
+	}
+
+	/** Commits the new order on a drop; a cancelled drag (Escape, dropped elsewhere) reverts. */
+	function endDrag(e: DragEvent): void {
+		const order = e.dataTransfer?.dropEffect === 'none' ? undefined : dragOrder()
+		const before = props.values ?? []
+		setDragged(undefined)
+		setDragOrder(undefined)
+		if (order?.some((v, i) => v !== before[i])) {
+			props.onReorder?.(order)
+		}
+	}
+
+	function chip(value: string, index: () => number): JSX.Element {
 		const label = (): string => optionOf(value)?.label ?? value
 		return (
-			<li class="combobox-chip">
+			<li
+				class="combobox-chip"
+				classList={{
+					'combobox-chip-sortable': sortable(),
+					'combobox-chip-dragged': dragged() === value,
+				}}
+				draggable={sortable()}
+				onDragStart={(e) => {
+					setDragged(value)
+					setDragOrder(props.values ?? [])
+					if (e.dataTransfer) {
+						e.dataTransfer.effectAllowed = 'move'
+						e.dataTransfer.setData('text/plain', label())
+					}
+				}}
+				onDragOver={(e) => dragOver(e, value)}
+				onDrop={(e) => e.preventDefault()}
+				onDragEnd={endDrag}
+			>
+				{props.chipStart?.(value, index())}
 				<Show when={optionOf(value)?.icon}>
 					{(icon) => (
 						<span class="combobox-chip-icon" aria-hidden="true">
@@ -391,6 +454,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 						type="button"
 						class="combobox-chip-remove"
 						aria-label={props.removeLabel?.(label()) ?? `Remove ${label()}`}
+						draggable={false}
 						// Keep focus (and an open list) where it is.
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={(e) => {
@@ -414,13 +478,23 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 				class="combobox-control"
 				classList={{ 'combobox-control-disabled': props.disabled === true }}
 				// Outside the input, keep focus where it is instead of blurring it.
+				// Sortable chips need the default action to start a drag.
 				onMouseDown={(e) => {
-					if (e.target !== input) e.preventDefault()
+					const onChip =
+						sortable() &&
+						e.target instanceof Element &&
+						e.target.closest('.combobox-chip')
+					if (e.target !== input && !onChip) e.preventDefault()
 				}}
 				onClick={() => {
 					input?.focus()
 					show()
 				}}
+				// Dropping between chips keeps the order shown last.
+				onDragOver={(e) => {
+					if (dragged() !== undefined) e.preventDefault()
+				}}
+				onDrop={(e) => e.preventDefault()}
 			>
 				<Show when={values().length > 0}>
 					<ul class="combobox-chips">

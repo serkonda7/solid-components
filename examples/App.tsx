@@ -1,4 +1,4 @@
-import { IconBulb, IconPlant, IconSpeakerphone } from '@tabler/icons-solidjs'
+import { IconBulb, IconPlant, IconSpeakerphone, IconStarFilled } from '@tabler/icons-solidjs'
 import { createEffect, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js'
 import {
 	ColorInput,
@@ -213,6 +213,7 @@ export default function App() {
 	const [product, setProduct] = createSignal('')
 	const [added, setAdded] = createSignal<string>()
 	const [productSet, setProductSet] = createSignal<string[]>([])
+	const [ranking, setRanking] = createSignal<string[]>(['1', '2', '3'])
 	const [search, setSearch] = createSignal('')
 	const [color, setColor] = createSignal('#3b82f6')
 	const [modalOpen, setModalOpen] = createSignal(false)
@@ -466,6 +467,38 @@ export default function App() {
 							/>
 							<p>
 								Selected values: <code>{JSON.stringify(productSet())}</code>
+							</p>
+						</section>
+
+						<h3>Sortable</h3>
+						<p>
+							With <code>sortable</code>, chips can be dragged into a new order.{' '}
+							<code>chipStart</code> marks the first one as the favorite.
+						</p>
+
+						<section class="combobox-demo">
+							<label for="ranking-combobox">Ranking</label>
+							<MultiCombobox
+								id="ranking-combobox"
+								values={ranking()}
+								onChange={setRanking}
+								options={productOptions}
+								sortable
+								chipStart={(_value, index) => (
+									<Show when={index === 0}>
+										<span
+											class="chip-favorite"
+											role="img"
+											title="Favorite"
+											aria-label="Favorite"
+										>
+											<IconStarFilled size={12} aria-hidden="true" />
+										</span>
+									</Show>
+								)}
+							/>
+							<p>
+								Order: <code>{JSON.stringify(ranking())}</code>
 							</p>
 						</section>
 					</Match>

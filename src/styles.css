@@ -619,6 +619,14 @@ scroll away with the table. */
 	cursor: default;
 }
 
+.combobox-chip-sortable {
+	cursor: grab;
+}
+
+.combobox-chip-dragged {
+	opacity: 0.5;
+}
+
 .combobox-chip-icon {
 	display: inline-flex;
 }

@@ -252,7 +252,9 @@ Same props as `Combobox` minus `value`/`emptyLabel`, with `values: string[]` and
 `onChange(values)`. Picked options show as removable chips inside the control and
 leave the list, which stays open for the next pick. Backspace in the empty search
 removes the last chip; Tab only closes the list. `removeLabel(label)` names a chip's
-remove button (default `Remove <label>`).
+remove button (default `Remove <label>`). `sortable` lets chips be dragged into a new
+order (passed to `onChange`); `chipStart(value, index)` renders at the start of each
+chip, e.g. a marker on the first one.
 
 ```tsx
 <MultiCombobox
@@ -404,7 +406,10 @@ condition, which resolves to the source barrel (~6000 dev requests).
 - `Combobox` and `MultiCombobox` share `ComboboxCore`; `multiple` is read once, so
   the mode can't change on a mounted instance.
 - Chip remove buttons and the multi control `preventDefault` on `mousedown` (outside
-  the input) so focus and the open list survive the click.
+  the input) so focus and the open list survive the click. Sortable chips are
+  exempt: a prevented `mousedown` stops the native drag from starting.
+- Sorting uses native drag and drop: the chips show a local `dragOrder` while
+  dragging, and `onChange` only gets the order on `dragend`.
 
 ### SearchBar (`src/search-bar.tsx`)
 - The `document` keydown listener ignores Shift/Alt combinations so it doesn't

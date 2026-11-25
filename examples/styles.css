@@ -98,6 +98,10 @@ button:hover {
 	margin-top: 16px;
 }
 
+.chip-favorite {
+	display: inline-flex;
+}
+
 .layout {
 	display: flex;
 	align-items: flex-start;
