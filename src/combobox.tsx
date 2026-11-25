@@ -14,6 +14,21 @@ import {
 import { Dynamic } from 'solid-js/web'
 import { cx, wrapIndex } from './utils'
 
+/** True when `el` cuts its text off (ellipsis). */
+function isTruncated(el: Element): boolean {
+	return el.scrollWidth > el.clientWidth
+}
+
+/** Shows the full text of a hovered, truncated list cell as its tooltip. */
+function titleTruncatedCell(e: MouseEvent): void {
+	const cell = (e.target as Element | null)?.closest<HTMLElement>(
+		'.combobox-option-label, .combobox-detail',
+	)
+	if (cell) {
+		cell.title = isTruncated(cell) ? (cell.textContent ?? '') : ''
+	}
+}
+
 /** The detail texts of an option, one per column. */
 function detailsOf(option: ComboboxOption | undefined): readonly string[] {
 	const detail = option?.detail
@@ -559,6 +574,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 				ref={list}
 				role="listbox"
 				onMouseMove={(e) => {
+					titleTruncatedCell(e)
 					if (props.previewAtCursor === true) {
 						setCursor({ x: e.clientX, y: e.clientY })
 					}
@@ -580,6 +596,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 	}
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: hover only sets the tooltip of a truncated value
 		<div
 			// `multiple` never changes, so it goes in `class`: a reactive `class`
 			// would wipe a static `classList` entry.
@@ -588,6 +605,18 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 				'combobox-open': open(),
 				'combobox-with-detail': !open() && selectedDetails().length > 0,
 				'combobox-with-icon': !open() && selected()?.icon !== undefined,
+			}}
+			// The closed value can be cut off too: its full text becomes the tooltip.
+			onMouseEnter={(e) => {
+				const root = e.currentTarget
+				const option = selected()
+				const cut =
+					!open() &&
+					option !== undefined &&
+					[...root.querySelectorAll(':scope > .combobox-value > *, :scope input')].some(
+						isTruncated,
+					)
+				root.title = cut ? [option.label, ...selectedDetails()].join(' · ') : ''
 			}}
 		>
 			{multiple ? control() : field}
