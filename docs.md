@@ -409,7 +409,9 @@ condition, which resolves to the source barrel (~6000 dev requests).
   the input) so focus and the open list survive the click. Sortable chips are
   exempt: a prevented `mousedown` stops the native drag from starting.
 - Sorting uses native drag and drop: the chips show a local `dragOrder` while
-  dragging, and `onChange` only gets the order on `dragend`.
+  dragging, and `onChange` gets the order on `drop` (handled on the control).
+  `dragend` only resets: Chrome reports `dropEffect` `none` there once the
+  dragged chip moved in the DOM.
 
 ### SearchBar (`src/search-bar.tsx`)
 - The `document` keydown listener ignores Shift/Alt combinations so it doesn't

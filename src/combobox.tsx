@@ -126,6 +126,7 @@ export function MultiCombobox(props: MultiComboboxProps): JSX.Element {
 				local.onChange ? (value) => local.onChange?.([...local.values, value]) : undefined
 			}
 			onRemove={(value) => local.onChange?.(local.values.filter((v) => v !== value))}
+			onReorder={local.onChange}
 		/>
 	)
 }
@@ -407,15 +408,29 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 		}
 	}
 
-	/** Commits the new order on a drop; a cancelled drag (Escape, dropped elsewhere) reverts. */
-	function endDrag(e: DragEvent): void {
-		const order = e.dataTransfer?.dropEffect === 'none' ? undefined : dragOrder()
+	/**
+	 * Commits the order shown on a drop inside the control. Not read from
+	 * `dragend`: Chrome reports `dropEffect` `none` there once the dragged chip
+	 * moved in the DOM, and may not fire it at all on a moved source.
+	 */
+	function drop(e: DragEvent): void {
+		const order = dragOrder()
+		if (dragged() === undefined || order === undefined) {
+			return
+		}
+		e.preventDefault()
 		const before = props.values ?? []
 		setDragged(undefined)
 		setDragOrder(undefined)
-		if (order?.some((v, i) => v !== before[i])) {
+		if (order.some((v, i) => v !== before[i])) {
 			props.onReorder?.(order)
 		}
+	}
+
+	/** A drag that ends without a drop (Escape, released elsewhere) reverts. */
+	function endDrag(): void {
+		setDragged(undefined)
+		setDragOrder(undefined)
 	}
 
 	function chip(value: string, index: () => number): JSX.Element {
@@ -437,7 +452,6 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 					}
 				}}
 				onDragOver={(e) => dragOver(e, value)}
-				onDrop={(e) => e.preventDefault()}
 				onDragEnd={endDrag}
 			>
 				{props.chipStart?.(value, index())}
@@ -490,11 +504,12 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 					input?.focus()
 					show()
 				}}
-				// Dropping between chips keeps the order shown last.
+				// Dropping between chips keeps the order shown last. Drops on chips
+				// bubble up here.
 				onDragOver={(e) => {
 					if (dragged() !== undefined) e.preventDefault()
 				}}
-				onDrop={(e) => e.preventDefault()}
+				onDrop={drop}
 			>
 				<Show when={values().length > 0}>
 					<ul class="combobox-chips">
