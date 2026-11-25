@@ -236,6 +236,8 @@ or pass `ariaLabel`.
 
 - Typing filters `label` and `detail`. Escape stops propagation, so enclosing
   dialogs stay open.
+- `detail` is a string or an array of strings: each entry lines up in its own
+  column after the labels; `''` leaves a cell empty.
 - `onAdd` pins an add entry last and receives the trimmed search text.
 - Option `icon` is any `Component<{ size?: number }>`. `preview` is a `Component`
   shown beside the list while the option is highlighted; it is `aria-hidden`, so

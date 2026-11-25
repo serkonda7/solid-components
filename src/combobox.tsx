@@ -14,6 +14,12 @@ import {
 import { Dynamic } from 'solid-js/web'
 import { cx, wrapIndex } from './utils'
 
+/** The detail texts of an option, one per column. */
+function detailsOf(option: ComboboxOption | undefined): readonly string[] {
+	const detail = option?.detail
+	return detail === undefined ? [] : typeof detail === 'string' ? [detail] : detail
+}
+
 /** Icon component rendered before an option label, e.g. one from `@tabler/icons-solidjs`. */
 export type ComboboxIcon = Component<{ size?: number }>
 
@@ -21,8 +27,11 @@ export type ComboboxIcon = Component<{ size?: number }>
 export interface ComboboxOption {
 	value: number | string
 	label: string
-	/** Secondary text (e.g. the manufacturer), shown muted in a column after the labels. */
-	detail?: string
+	/**
+	 * Secondary text (e.g. the manufacturer), shown muted in a column after the
+	 * labels. Several texts line up in one column each; `''` leaves a cell empty.
+	 */
+	detail?: string | readonly string[]
 	/** Glyph shown before the label, in the list and in the closed input. */
 	icon?: ComboboxIcon
 	/** Rendered in a panel beside the open list while this option is highlighted. */
@@ -173,10 +182,15 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 			: choices().filter(
 					(o) =>
 						o.label.toLowerCase().includes(needle) ||
-						(o.detail?.toLowerCase().includes(needle) ?? false),
+						detailsOf(o).some((d) => d.toLowerCase().includes(needle)),
 				)
 	})
-	const hasDetail = (): boolean => props.options.some((o) => o.detail !== undefined)
+	/** Detail columns of the list: the most details any option has. */
+	const detailColumns = createMemo((): number =>
+		Math.max(0, ...props.options.map((o) => detailsOf(o).length)),
+	)
+	const hasDetail = (): boolean => detailColumns() > 0
+	const selectedDetails = (): readonly string[] => detailsOf(selected()).filter((d) => d !== '')
 	// The add entry follows the filtered options in the arrow-key cycle.
 	const addIndex = (): number => filtered().length
 	const count = (): number => filtered().length + (props.onAdd ? 1 : 0)
@@ -321,8 +335,12 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 					</Show>
 					{option.label}
 				</span>
-				<Show when={option.detail}>
-					<span class="combobox-detail">{option.detail}</span>
+				<Show when={hasDetail()}>
+					<For each={Array.from({ length: detailColumns() }, (_, i) => i)}>
+						{(column) => (
+							<span class="combobox-detail">{detailsOf(option)[column] ?? ''}</span>
+						)}
+					</For>
 				</Show>
 			</div>
 		)
@@ -529,6 +547,14 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 			<div
 				class="combobox-list"
 				classList={{ 'combobox-list-detail': hasDetail() }}
+				// The last detail column takes the remaining width, as in the CSS.
+				style={
+					detailColumns() > 1
+						? {
+								'grid-template-columns': `minmax(0, max-content) repeat(${detailColumns() - 1}, minmax(0, max-content)) minmax(0, 1fr)`,
+							}
+						: undefined
+				}
 				id={listId()}
 				ref={list}
 				role="listbox"
@@ -560,7 +586,7 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 			class={cx('combobox', multiple && 'combobox-multiple', props.class)}
 			classList={{
 				'combobox-open': open(),
-				'combobox-with-detail': !open() && Boolean(selected()?.detail),
+				'combobox-with-detail': !open() && selectedDetails().length > 0,
 				'combobox-with-icon': !open() && selected()?.icon !== undefined,
 			}}
 		>
@@ -572,10 +598,12 @@ function ComboboxCore(props: ComboboxCoreProps): JSX.Element {
 					</span>
 				)}
 			</Show>
-			<Show when={!open() && selected()?.detail}>
+			<Show when={!open() && selectedDetails().length > 0}>
 				<span class="combobox-value" aria-hidden="true">
 					<span class="combobox-option-label">{selected()?.label}</span>
-					<span class="combobox-detail">{selected()?.detail}</span>
+					<For each={selectedDetails()}>
+						{(detail) => <span class="combobox-detail">{detail}</span>}
+					</For>
 				</span>
 			</Show>
 			<IconChevronDown class="combobox-chevron" size={16} aria-hidden="true" />
